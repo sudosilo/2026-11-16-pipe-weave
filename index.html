@@ -97,6 +97,7 @@ var rightMode=false,rootMode=false,zoomMode=false,driving=false,pockets=[],water
 var DPR=Math.min(window.devicePixelRatio||1,2),cssW=1,cssH=1;
 var view={x:0,y:0,s:1};
 var pipes=[],active=null,target=null,paused=null,nextId=1,topL=0,botL=0,mode='draw',commits=0;
+var undoSize=0,pending=null,gestureLock=false;
 var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
 var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over'};
 var wid=document.getElementById('wid'),spd=document.getElementById('spd'),statusEl=document.getElementById('status'),ask=document.getElementById('ask');
@@ -145,7 +146,7 @@ var last=p.pts[p.pts.length-1];
 if(Math.hypot(p.hx-last.x,p.hy-last.y)<0.01)return;
 p.pts.push({x:p.hx,y:p.hy,w:p.hw,l:p.layer,d:p.headD});
 addSeg(p,p.pts.length-2);
-commits++;if(commits%(growing?400:80)===0)snapshot()}
+commits++;if(commits%(growing?400:25)===0)snapshot()}
 
 function angDiff(a,b){var d=a-b;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
 function snap(a){var q=Math.PI/2;return Math.round(a/q)*q}
@@ -281,9 +282,10 @@ dirty=true}
 
 function endPipeOf(p,auto){if(!p||!p.alive)return;if(!auto)snapshot();commit(p);p.alive=false;p.endCap=true;if(p===active){target=null;pickNextActive()}dirty=true}
 
-function snapshot(){undoStack.push(JSON.stringify({pipes:pipes,a:active?active.id:0,topL:topL,botL:botL,nextId:nextId}));if(undoStack.length>50)undoStack.shift()}
+function snapshot(){var j=JSON.stringify({pipes:pipes,a:active?active.id:0,topL:topL,botL:botL,nextId:nextId});if(undoStack.length&&undoStack[undoStack.length-1]===j)return;undoStack.push(j);undoSize+=j.length;while(undoStack.length>1&&(undoSize>40000000||undoStack.length>300))undoSize-=undoStack.shift().length}
 function undo(){
-if(!undoStack.length)return;var s=JSON.parse(undoStack.pop());
+if(!undoStack.length)return;var now=JSON.stringify({pipes:pipes,a:active?active.id:0,topL:topL,botL:botL,nextId:nextId});var raw=undoStack.pop();undoSize-=raw.length;
+if(raw===now&&undoStack.length){raw=undoStack.pop();undoSize-=raw.length}var s=JSON.parse(raw);
 pipes=s.pipes;topL=s.topL;botL=s.botL;nextId=s.nextId;active=byId(s.a);
 paused=null;ask.style.display='none';target=null;rebuildGrid();syncSlider();dirty=true;setStatus('Undone.')}
 
@@ -511,6 +513,7 @@ if(!paused&&aliveCount()===0){growing=false;$('bGrow').classList.remove('on');se
 else if(!driving&&stepPipe(active))moved=true;
 if(moved)dirty=true;
 frameNo++;
+if(pending&&!gestureLock&&ptrs.size===1&&performance.now()-pending.t>160)firePending();
 if(flowMode==='cars'||flowMode==='critters'){if(frameNo%30===0)topUpCritters();updateCritters();dirty=true}
 else if(flowMode==='water'){updateWater();dirty=true}
 if(rootMode){updateRoots();dirty=true}
@@ -532,11 +535,8 @@ if(growing&&!growOrigin&&!rootMode)growOrigin={x:w.x,y:w.y};
 $('bNew').classList.remove('on');syncSlider();dirty=true;
 setStatus(growing?'Growing.':'Drag to steer. Tap a blue dot to switch pipes.')}
 
-cv.addEventListener('pointerdown',function(e){
-cv.setPointerCapture(e.pointerId);var s=pos(e);ptrs.set(e.pointerId,s);
-if(ptrs.size===2){dragging=false;panLast=null;var pi=pinchInfo();pinch={mx:pi.mx,my:pi.my,d:pi.d,v:{x:view.x,y:view.y,s:view.s}};return}
-if(ptrs.size>2||paused||driving)return;
-if(zoomMode){panLast=s;return}
+function activate(s){
+if(paused||driving)return;
 var w=toWorld(s);
 if(mode==='place'||!active||!active.alive||(growing&&aliveCount()===0)){plantAt(w);return}
 if(growing)return;
@@ -544,17 +544,34 @@ for(var i=0;i<pipes.length;i++){var p=pipes[i];if(!p.alive)continue;
 var sx=p.hx*view.s+view.x,sy=p.hy*view.s+view.y;
 if(Math.hypot(sx-s.x,sy-s.y)<30){active=p;target=null;syncSlider();dirty=true;setStatus('Pipe picked. Drag to steer.');return}}
 if(rootMode)w.y=Math.max(w.y,active.hw);
-target=w;dragging=true;dirty=true});
+snapshot();target=w;dragging=true;dirty=true}
+function firePending(){if(!pending)return;var s=pending.s;pending=null;activate(s)}
+
+cv.addEventListener('pointerdown',function(e){
+cv.setPointerCapture(e.pointerId);var s=pos(e);ptrs.set(e.pointerId,s);
+if(ptrs.size>=2){pending=null;gestureLock=true;dragging=false;panLast=null;
+if(ptrs.size===2){var pi=pinchInfo();pinch={mx:pi.mx,my:pi.my,d:pi.d,v:{x:view.x,y:view.y,s:view.s}}}return}
+if(gestureLock||paused||driving)return;
+if(zoomMode){panLast=s;return}
+pending={s:s,id:e.pointerId,t:performance.now()}});
 
 cv.addEventListener('pointermove',function(e){
 if(!ptrs.has(e.pointerId))return;var s=pos(e);ptrs.set(e.pointerId,s);
 if(pinch&&ptrs.size===2){var pi=pinchInfo(),ns=Math.max(zMin(),Math.min(zMax(),pinch.v.s*pi.d/pinch.d));
 var wx=(pinch.mx-pinch.v.x)/pinch.v.s,wy=(pinch.my-pinch.v.y)/pinch.v.s;
 view.s=ns;if(!driving){view.x=pi.mx-wx*ns;view.y=pi.my-wy*ns}dirty=true;return}
+if(gestureLock)return;
 if(zoomMode&&panLast&&ptrs.size===1){view.x+=s.x-panLast.x;view.y+=s.y-panLast.y;panLast=s;dirty=true;return}
+if(pending&&pending.id===e.pointerId){
+if(Math.hypot(s.x-pending.s.x,s.y-pending.s.y)>12||performance.now()-pending.t>160)firePending();else return}
 if(dragging&&ptrs.size===1&&!growing){var w=toWorld(s);if(rootMode&&active)w.y=Math.max(w.y,active.hw);target=w;dirty=true}});
 
-function up(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(ptrs.size===0){dragging=false;panLast=null}}
+function up(e){
+ptrs.delete(e.pointerId);
+if(pending&&pending.id===e.pointerId&&!gestureLock)firePending();
+pending=null;dragging=false;
+if(ptrs.size<2)pinch=null;
+if(ptrs.size===0){gestureLock=false;panLast=null}}
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 cv.addEventListener('wheel',function(e){e.preventDefault();var s=pos(e);zoomAt(Math.exp(-e.deltaY*0.0015),s.x,s.y)},{passive:false});
 
