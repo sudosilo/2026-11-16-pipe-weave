@@ -178,8 +178,38 @@ if(kind==='over')p.layer=++topL;else p.layer=--botL;
 p.crossings.push({d:p.headD,role:role});
 if(kind!=='join'&&info.best&&info.best.q)info.best.q.crossings.push({d:info.best.qd,role:opp(role)});
 info.ids.forEach(function(id){if(p.passing.indexOf(id)<0)p.passing.push(id)});
-if(kind==='join'&&info.best){p.joinTo={x:info.best.x,y:info.best.y};if(info.best.q)p.joinInfo={q:info.best.q.id,qd:info.best.qd}}
+if(kind==='join'&&info.best){
+if(info.best.q)openJoin(p,info.best);
+else p.joinTo={x:info.best.x,y:info.best.y}}
 dirty=true}
+
+function openJoin(p,B){
+var q=B.q,qp=pipePoints(q),qlen=pipeLen(q),loc=locate(qp,B.qd);
+var tx=Math.cos(loc.ang),ty=Math.sin(loc.ang),ux=Math.cos(p.dir),uy=Math.sin(p.dir);
+var sn=ux*ty-uy*tx,qdJ=B.qd;
+if(Math.abs(sn)>0.3){var sl=((B.x-p.hx)*ty-(B.y-p.hy)*tx)/sn;
+if(sl>0){var jx=p.hx+ux*sl,jy=p.hy+uy*sl;qdJ=B.qd+((jx-B.x)*tx+(jy-B.y)*ty)}}
+qdJ=Math.max(0,Math.min(qlen,qdJ));
+var J=locate(qp,qdJ),as=Math.max(0.3,Math.abs(sn)),hq=loc.w/2,hp=p.hw/2,cs=ux*tx+uy*ty;
+var qdE=qdJ-(hq/as)*cs,half=hp/as+1;
+var side=((p.hx-B.x)*(-ty)+(p.hy-B.y)*tx)>0?'L':'R';
+q.openings=q.openings||[];q.openings.push({d0:qdE-half,d1:qdE+half,side:side});
+p.joinTo={x:J.x,y:J.y};p.joinInfo={q:q.id,qd:qdJ}}
+
+function strokeEdge(c,E,pts,a,b,gaps){
+function inGap(d){for(var g=0;g<gaps.length;g++)if(d>gaps[g].d0&&d<gaps[g].d1)return true;return false}
+c.beginPath();var pen=false,i;
+for(i=a;i<=b;i++){
+var d=pts[i].d;
+if(i>a&&gaps.length){
+var dp=pts[i-1].d,lo=Math.min(dp,d),hi=Math.max(dp,d),cuts=[];
+gaps.forEach(function(g){[g.d0,g.d1].forEach(function(bd){if(bd>lo&&bd<hi)cuts.push((bd-dp)/(d-dp))})});
+cuts.sort(function(x,y){return x-y});
+cuts.forEach(function(t){
+var x=E[i-1][0]+(E[i][0]-E[i-1][0])*t,y=E[i-1][1]+(E[i][1]-E[i-1][1])*t,after=inGap(dp+(d-dp)*(t+1e-4));
+if(after){if(pen){c.lineTo(x,y);pen=false}}else{c.moveTo(x,y);pen=true}})}
+if(!inGap(d)){if(pen)c.lineTo(E[i][0],E[i][1]);else{c.moveTo(E[i][0],E[i][1]);pen=true}}}
+c.stroke()}
 
 function growTurnRA(p,minRun){
 if(p.pendingTurn&&p.runLen>p.hw*0.8+12){var pt=p.pendingTurn;p.pendingTurn=0;var t0=p.dir+pt;if(!(rootMode&&Math.sin(t0)<-0.5)){turnRA(p,t0);return}}
@@ -389,8 +419,9 @@ var crs=byPipe[p.id];
 if(crs){var d0=pts[r.a].d,d1=pts[r.b].d;
 crs.forEach(function(cr){if(cr.d>=d0&&(cr.d<d1||(r.b===r.last&&cr.d<=d1)))drawCritter(c,cr,pts,now)})}
 c.lineWidth=lw;c.strokeStyle=TH.ink;
-c.beginPath();c.moveTo(L[r.a][0],L[r.a][1]);for(i=r.a+1;i<=r.b;i++)c.lineTo(L[i][0],L[i][1]);c.stroke();
-c.beginPath();c.moveTo(R[r.a][0],R[r.a][1]);for(i=r.a+1;i<=r.b;i++)c.lineTo(R[i][0],R[i][1]);c.stroke();
+var ops=p.openings||[];
+strokeEdge(c,L,pts,r.a,r.b,ops.filter(function(g){return g.side==='L'}));
+strokeEdge(c,R,pts,r.a,r.b,ops.filter(function(g){return g.side==='R'}));
 if(r.a===0&&p.startCap){c.beginPath();c.moveTo(L[0][0],L[0][1]);c.lineTo(R[0][0],R[0][1]);c.stroke()}
 if(r.b===r.last&&!p.alive&&p.endCap){c.beginPath();c.moveTo(L[r.last][0],L[r.last][1]);c.lineTo(R[r.last][0],R[r.last][1]);c.stroke()}});
 if(withHeads&&!driving){
@@ -654,6 +685,7 @@ p.pts=np;p.layer=np[n-1].l;
 var a=np[n-2],b=np[n-1];p.dir=Math.atan2(b.y-a.y,b.x-a.x);p.hx=b.x;p.hy=b.y;p.hw=b.w;p.tw=b.w;p.headD=total;p.runLen=0;
 p.startCap=true;p.endCap=true;
 p.crossings.forEach(function(c){c.d=total-c.d});
+(p.openings||[]).forEach(function(g){var d0=total-g.d1,d1=total-g.d0;g.d0=d0;g.d1=d1;g.side=g.side==='L'?'R':'L'});
 pipes.forEach(function(q){if(q.joinInfo&&q.joinInfo.q===p.id)q.joinInfo.qd=total-q.joinInfo.qd});
 var wv=water[p.id];if(wv){var lo=total-wv.hi,hi=total-wv.lo;wv.lo=lo;wv.hi=hi}
 critters.forEach(function(c){if(c.pid===p.id){c.d=total-c.d;c.dir=-c.dir}});
