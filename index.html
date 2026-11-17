@@ -87,6 +87,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <button id="bSave">Save image</button>
 <button id="bClear">Clear</button>
 <button id="bZoom">Zoom</button>
+<button id="bEdit" class="on">Edit dots: On</button>
 </div>
 </div>
 <div class="sec" id="secMake">
@@ -100,6 +101,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <button id="bRec">Record</button>
 <button id="bPlay">Play</button>
 <button id="bAngle">Shape: Curvy</button>
+<button id="bSurprise">Surprise me</button>
 </div>
 </div>
 <div class="sec" id="secStyle">
@@ -142,6 +144,31 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <option value="lattice">Lattice</option>
 <option value="diamonds">Diamond chain</option>
 <option value="fan">Fan</option>
+<option value="cathedral">Cathedral</option>
+<option value="stairs">Staircase</option>
+<option value="zigzag">Zigzag</option>
+<option value="lightning">Lightning</option>
+<option value="honeycomb">Honeycomb</option>
+<option value="tentacles">Tentacles</option>
+<option value="rose">Rose</option>
+<option value="circuit">Circuit board</option>
+<option value="kelp">Kelp forest</option>
+<option value="mycelium">Mycelium</option>
+<option value="snowflake">Snowflake</option>
+<option value="fireworks">Fireworks</option>
+<option value="labyrinth">Labyrinth</option>
+<option value="waves">Waves</option>
+<option value="bloom">Bloom</option>
+<option value="canopy">Canopy</option>
+<option value="coil">Coil</option>
+<option value="starburst">Starburst</option>
+<option value="ribcage">Ribcage</option>
+<option value="fern">Fern</option>
+<option value="spine">Spine</option>
+<option value="city">City grid</option>
+<option value="nautilus">Nautilus</option>
+<option value="willow">Willow</option>
+<option value="crystal">Crystal</option>
 <option value="pattern">Your pattern</option>
 <option value="custom">Custom</option>
 </select></label>
@@ -154,8 +181,19 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <option value="0">Off</option>
 <option value="1">Always wiggle</option>
 </select></label>
+<label class="f">Switch rules <select id="rRotate">
+<option value="0">Never</option>
+<option value="10">Every 10 seconds</option>
+<option value="30">Every 30 seconds</option>
+<option value="60">Every minute</option>
+</select></label>
 <label class="f">Steps <input id="rSteps" type="text" placeholder="xxxxxxxx"></label>
-<p class="hint">Steps go in order, separated by commas. You can use grow, split, kill, merge, link, spiral, bubble, pattern, end, and repeat. A number after a step sets how long, how many, or how many turns. Merge sends the branch into its nearest neighbor. Link keeps the branch going and sends a connector to its neighbor. Repeat with a number jumps back to that step.</p>
+<button id="rSurprise">Surprise me</button>
+<p class="hint">How to write steps. Steps run in order from left to right, separated by commas, and every branch follows them on its own. A number after a step changes it.</p>
+<p class="hint">Grow 100 travels that far before the next step. Split 3 divides the branch into three side by side. Kill 2 right after a split cuts two of those new branches short as stubs. Fork 40 splits into two branches that spread apart 40 degrees each way. Burst 6 shoots six branches out evenly in every direction like a star. Sprout 60 keeps the branch going and pushes out a short twig on each side at 60 degrees.</p>
+<p class="hint">Turn 90 makes a sharp corner, and a negative number like turn -90 turns the other way. Arc 90 bends smoothly through that many degrees. Spiral 2 curls inward two full turns. Straighten points the branch back to the direction it started in. Wander 0 makes perfectly straight lines, wander 100 is normal, and wander 300 is jittery.</p>
+<p class="hint">Width 70 shrinks the branch to 70 percent, and width 150 swells it. Bubble makes a round bulge. Pattern 2 plays your recorded pattern twice. Merge sends the branch into its nearest neighbor and joins it. Link keeps the branch going and sends a connector over to its neighbor. End stops the branch. Repeat starts the steps over, and repeat 3 jumps back to step 3.</p>
+<p class="hint">Example: wander 0, grow 140, fork 25, grow 120, fork 25, grow 100, arc 60, end makes the Cathedral preset.</p>
 <button id="rDone">Done</button>
 </div>
 <div id="ask">
@@ -189,7 +227,35 @@ var SKINS=['plain','road','pipe','tunnel','tracks'],SKIN_NAMES={plain:'Plain',ro
 var INKS=[['Graphite',''],['Blue','#2457c5'],['Red','#c8312b'],['Yellow','#c99a06'],['Green','#2f8a3e'],['Purple','#7a3fb5'],['Orange','#d9681c'],['Pink','#d23f86']],inkIdx=0;
 var rules={lean:'free',wiggle:false},recipe=[],recording=false,rec=null,pattern=null;
 var steerMode=false,steerGo=true,leftHeld=false,rightHeld=false,tiltOn=false,tilt=null,tiltLatch=false;
-var PRESETS={random:['free',0,''],tree:['up',0,'grow 140, split 3, kill 2, repeat'],pine:['up',0,'grow 60, split 3, kill 2, grow 60, split 2, kill 1, repeat'],roots:['down',1,'grow 100, split 2, repeat'],coral:['free',1,'grow 70, split 3, repeat'],vine:['free',0,'grow 160, spiral 2, grow 80, split 2, repeat'],bubbles:['free',1,'grow 120, bubble, repeat'],pattern:['free',0,'pattern 2, split 2, repeat'],lattice:['free',0,'grow 40, split 4, grow 70, link, repeat 3'],diamonds:['free',0,'grow 60, split 2, grow 70, merge, repeat'],fan:['up',0,'grow 80, split 5, grow 90, repeat']};
+var PRESETS={random:['free',0,''],tree:['up',0,'grow 140, split 3, kill 2, repeat'],pine:['up',0,'grow 60, split 3, kill 2, grow 60, split 2, kill 1, repeat'],roots:['down',1,'grow 100, split 2, repeat'],coral:['free',1,'grow 70, split 3, repeat'],vine:['free',0,'grow 160, spiral 2, grow 80, split 2, repeat'],bubbles:['free',1,'grow 120, bubble, repeat'],pattern:['free',0,'pattern 2, split 2, repeat'],lattice:['free',0,'grow 40, split 4, grow 70, link, repeat 3'],diamonds:['free',0,'grow 60, split 2, grow 70, merge, repeat'],fan:['up',0,'grow 80, split 5, grow 90, repeat'],
+cathedral:['up',0,'wander 0, grow 140, fork 25, grow 120, fork 25, grow 100, arc 60, end'],
+stairs:['free',0,'wander 0, grow 60, turn 90, grow 40, turn -90, repeat'],
+zigzag:['free',0,'wander 0, turn 45, grow 60, turn -90, grow 60, turn 45, repeat'],
+lightning:['down',0,'wander 300, grow 40, split 2, kill 1, turn 30, grow 40, turn -30, repeat'],
+honeycomb:['free',0,'wander 0, burst 3, grow 40, fork 60, grow 45, straighten, grow 40, fork 60, grow 45, straighten, grow 40, fork 60, grow 45, straighten, grow 40, end'],
+tentacles:['free',1,'burst 5, wander 150, grow 90, width 85, grow 90, width 85, grow 90, width 80, grow 90, width 70, grow 90, end'],
+rose:['free',0,'burst 5, grow 60, spiral 2, end'],
+circuit:['free',0,'wander 0, grow 100, fork 45, grow 60, straighten, grow 60, fork 45, grow 40, straighten, grow 40, end'],
+kelp:['up',1,'grow 150, split 2, kill 1, repeat'],
+mycelium:['free',0,'grow 40, split 2, wander 200, grow 60, link, repeat 3'],
+snowflake:['free',0,'wander 0, burst 6, grow 100, fork 50, grow 50, fork 50, grow 30, end'],
+fireworks:['free',0,'grow 150, burst 8, grow 80, burst 3, grow 40, end'],
+labyrinth:['free',0,'wander 0, grow 60, turn 90, grow 60, turn 90, grow 30, turn -90, repeat'],
+waves:['free',0,'wander 0, arc 60, arc -60, repeat'],
+bloom:['free',0,'grow 120, burst 6, arc 120, end'],
+canopy:['up',0,'grow 120, fork 35, grow 70, fork 30, grow 50, width 70, fork 25, grow 40, end'],
+coil:['free',0,'grow 60, arc 270, grow 40, arc -270, repeat'],
+starburst:['free',0,'wander 0, burst 12, grow 160, width 50, grow 60, end'],
+ribcage:['up',0,'wander 0'+', grow 40, sprout 75'.repeat(9)+', grow 60, end'],
+fern:['up',1,'grow 30, sprout 50, width 96, repeat'],
+spine:['free',0,'wander 0'+', grow 30, sprout 85'.repeat(12)+', grow 40, end'],
+city:['free',0,'wander 0, burst 4, grow 120, fork 90, grow 90, fork 90, grow 60, fork 90, grow 40, end'],
+nautilus:['free',0,'spiral 3, grow 100, burst 3, spiral 2, end'],
+willow:['up',1,'grow 120, burst 5, arc 160, grow 120, end'],
+crystal:['free',0,'wander 0, grow 50, fork 30, grow 40, fork 30, grow 30, fork 30, end']};
+var PRESET_NAMES={tree:'Tree',pine:'Pine',roots:'Roots',coral:'Coral',vine:'Spiral vine',bubbles:'Bubbles',lattice:'Lattice',diamonds:'Diamond chain',fan:'Fan',cathedral:'Cathedral',stairs:'Staircase',zigzag:'Zigzag',lightning:'Lightning',honeycomb:'Honeycomb',tentacles:'Tentacles',rose:'Rose',circuit:'Circuit board',kelp:'Kelp forest',mycelium:'Mycelium',snowflake:'Snowflake',fireworks:'Fireworks',labyrinth:'Labyrinth',waves:'Waves',bloom:'Bloom',canopy:'Canopy',coil:'Coil',starburst:'Starburst',ribcage:'Ribcage',fern:'Fern',spine:'Spine',city:'City grid',nautilus:'Nautilus',willow:'Willow',crystal:'Crystal',pattern:'Your pattern'};
+var editMode=true,rotateSec=0,rotT=0;
+var geoCache=new WeakMap();
 function inkColor(){return INKS[inkIdx][1]||TH.ink}
 var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
 var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over'};
@@ -202,7 +268,7 @@ function resize(){var r=cv.getBoundingClientRect(),w=Math.round(Math.max(1,r.wid
 window.addEventListener('resize',resize);
 
 function newPipe(x,y,w,dir,layer){
-var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0,hue:Math.random()*360,parent:0,kids:[],joinInfo:null,runLen:0,pendingTurn:0,pc:0,left:null};
+var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0,hue:Math.random()*360,parent:0,kids:[],joinInfo:null,runLen:0,pendingTurn:0,pc:0,left:null,wander:1,home:dir};
 pipes.push(p);return p}
 function byId(id){for(var i=0;i<pipes.length;i++)if(pipes[i].id===id)return pipes[i];return null}
 function pipeMap(){var m={};pipes.forEach(function(p){m[p.id]=p});return m}
@@ -310,7 +376,7 @@ c.stroke()}
 
 function growTurnRA(p,minRun){
 if(p.pendingTurn&&p.runLen>p.hw*0.8+12){var pt=p.pendingTurn;p.pendingTurn=0;var t0=p.dir+pt;var ln=rootMode?'down':rules.lean;if(!((ln==='down'&&Math.sin(t0)<-0.5)||(ln==='up'&&Math.sin(t0)>0.5))){turnRA(p,t0);return}}
-if(p.runLen>minRun*1.3&&Math.random()<speed/160){
+if(p.runLen>minRun*1.3&&Math.random()<speed/160*(p.wander==null?1:p.wander)){
 var c=[p.dir+Math.PI/2,p.dir-Math.PI/2];
 var lean=rootMode?'down':rules.lean,sg=lean==='up'?-1:1;
 if(lean!=='free'){c=c.filter(function(t){return Math.sin(t)*sg>-0.5});var pref=c.filter(function(t){return Math.sin(t)*sg>0.5});if(pref.length&&Math.random()<0.6)c=pref}
@@ -344,6 +410,7 @@ if(tiltOn&&tilt&&tilt.gamma!=null){var g=(tilt.gamma-tilt.g0)/25;if(Math.abs(g)>
 return Math.max(-1,Math.min(1,v))}
 
 function progSteer(p,len){
+if(p.arc){var ar=p.arc,aa=len/ar.r;p.dir+=aa*ar.sign;ar.left-=aa;if(ar.left<=0)p.arc=null;return true}
 if(p.spiral){var sp=p.spiral,a=len/sp.r;p.dir+=a*sp.sign;sp.left-=a;sp.r=Math.max(p.hw*0.7+6,sp.r-sp.dr*a);if(sp.left<=0)p.spiral=null;return true}
 if(p.play&&pattern){var pl=p.play,n=pattern.k.length,i=Math.floor(pl.pos/2)%n;p.dir+=pattern.k[i]*len;p.tw=Math.max(4,pl.base*pattern.w[i]);pl.pos+=len;
 if(pl.cycles&&pl.pos>=n*2*pl.cycles){p.play=null;p.tw=pl.base}return true}
@@ -357,7 +424,7 @@ if(!p||!p.alive)return;var base=p.tw,amp=Math.max(30,base*1.6);
 p.bubble={start:p.headD,len:amp*2.2+base,amp:amp,base:base}}
 
 function recipeTick(p,len){
-if(p.link||p.lifeLeft!=null||p.spiral||(p.play&&p.play.cycles)||p.bubble||p.mergeInto!=null)return;
+if(p.link||p.lifeLeft!=null||p.spiral||p.arc||(p.play&&p.play.cycles)||p.bubble||p.mergeInto!=null)return;
 for(var guard=0;guard<12;guard++){
 var st=recipe[p.pc];if(!st){p.pc=0;st=recipe[0];if(!st)return}
 if(st.op==='grow'){if(p.left==null)p.left=st.n;p.left-=len;len=0;if(p.left>0)return;p.left=null;p.pc++;continue}
@@ -369,16 +436,26 @@ if(st.op==='link'){var lq=pickMerge(p);if(lq&&aliveCount()<MAXHEADS)spawnLink(p,
 if(st.op==='spiral'){startSpiral(p,st.n);return}
 if(st.op==='bubble'){startBubble(p);return}
 if(st.op==='pattern'){if(pattern)p.play={pos:0,base:p.hw,cycles:st.n};return}
-if(st.op==='end'){endPipeOf(p,true);return}}}
+if(st.op==='end'){endPipeOf(p,true);return}
+if(st.op==='turn'){commit(p);p.dir+=st.n*Math.PI/180;if(rightMode)p.dir=snap(p.dir);p.runLen=0;continue}
+if(st.op==='arc'){if(rightMode){commit(p);p.dir=snap(p.dir+st.n*Math.PI/180);continue}p.arc={left:Math.abs(st.n)*Math.PI/180,r:Math.max(30,p.hw*1.5),sign:st.n<0?-1:1};return}
+if(st.op==='sprout'){var sa=st.n*Math.PI/180;[-1,1].forEach(function(sg){if(aliveCount()>=MAXHEADS)return;var k=newPipe(p.hx,p.hy,Math.max(3,p.hw*0.5),p.dir+sg*sa,p.layer);k.startCap=false;k.aimed=true;k.family=[p.id].concat(p.family);k.grace=p.hw*1.5+20;k.lifeLeft=p.hw*2.5+30;k.wander=p.wander;k.hue=p.hue;k.tw=Math.max(2,k.hw*0.6)});continue}
+if(st.op==='width'){p.tw=Math.max(3,Math.min(240,p.hw*st.n/100));continue}
+if(st.op==='wander'){p.wander=Math.max(0,st.n)/100;if(p.wander===0)p.turn=0;continue}
+if(st.op==='straighten'){commit(p);p.dir=p.home!=null?p.home:p.dir;if(rightMode)p.dir=snap(p.dir);continue}
+if(st.op==='fork'){if(aliveCount()+1<=MAXHEADS&&p.hw>=8){var fa=st.n*Math.PI/180,fk=split(p,2,true,0);if(fk.length===2){fk[0].dir=p.dir-fa;fk[1].dir=p.dir+fa;fk.forEach(function(k){k.hw=k.tw=k.pts[0].w=Math.max(4,p.hw*0.72)});if(rightMode){fk[0].dir=snap(fk[0].dir);fk[1].dir=snap(fk[1].dir)}fk.forEach(function(k){k.pendingTurn=0})}return}continue}
+if(st.op==='burst'){if(aliveCount()+st.n-1<=MAXHEADS&&p.hw>=6){var bk=split(p,st.n,true,0),bw=Math.max(4,p.hw*0.6);bk.forEach(function(k,i){k.hx=p.hx;k.hy=p.hy;k.pts[0].x=p.hx;k.pts[0].y=p.hy;k.dir=p.dir+Math.PI*2*i/bk.length;if(rightMode)k.dir=snap(k.dir);k.home=k.dir;k.pendingTurn=0;k.hw=k.tw=k.pts[0].w=bw;k.grace=p.hw*3+40});return}continue}}}
 
 function parseRecipe(txt){
 var out=[];
 (txt||'').toLowerCase().split(/[,;\n]+/).forEach(function(t){
-var m=t.trim().match(/^(grow|split|kill|merge|link|spiral|bubble|pattern|repeat|end)\s*(\d+)?/);if(!m)return;
-var n=m[2]?+m[2]:null;
+var m=t.trim().match(/^(grow|split|kill|merge|link|spiral|bubble|pattern|repeat|end|turn|arc|fork|burst|width|wander|straighten|sprout)\s*(-?\d+)?/);if(!m)return;
+var n=m[2]!=null?+m[2]:null;
 if(m[1]==='kill'){var last=out[out.length-1];if(last&&last.op==='split')last.kill=Math.max(0,Math.min(n||1,last.n-1));return}
-var def={grow:100,split:2,spiral:2,pattern:1};
-out.push({op:m[1],n:Math.max(1,n||def[m[1]]||1),kill:0})});
+var def={grow:100,split:2,spiral:2,pattern:1,turn:90,arc:90,fork:30,burst:6,width:100,wander:100,sprout:60};
+var signed={turn:1,arc:1,fork:1,wander:1,width:1,sprout:1};
+var val=n==null?(def[m[1]]||1):n;if(!signed[m[1]])val=Math.max(1,val);
+out.push({op:m[1],n:val,kill:0})});
 return out}
 
 function stepPipe(p){
@@ -394,7 +471,7 @@ else if(progSteer(p,len)){}
 else if(rightMode){p.dir=snap(p.dir);growTurnRA(p,minRun)}
 else{
 var lean=rootMode?'down':rules.lean,g,pullK=rootMode?0.003:0.012;
-p.turn+=(Math.random()-0.5)*(lean==='free'||rootMode?0.004:0.0015)*len;
+var wd=p.wander==null?1:p.wander;p.turn+=(Math.random()-0.5)*(lean==='free'||rootMode?0.004:0.0015)*len*wd;if(wd===0)p.turn=0;
 var lim=1/(rad*1.5);p.turn=Math.max(-lim,Math.min(lim,p.turn))*0.995;
 p.dir+=p.turn*len;
 if(lean==='down'){g=angDiff(Math.PI/2,p.dir);p.dir+=Math.max(-pullK,Math.min(pullK,g*0.02))*len}
@@ -475,14 +552,14 @@ function finishJoin(p){commit(p);
 if(p.feeds&&p.joinInfo){var fq=byId(p.joinInfo.q);if(fq&&fq.alive)fq.tw=Math.min(240,fq.tw+p.hw*0.9)}p.alive=false;p.endCap=false;p.joinTo=null;if(p===active){target=null;dragging=false;pickNextActive();setStatus('Joined. Tap a blue dot or drag to steer the next pipe.')}dirty=true}
 
 function split(p,n,auto,kill){
-if(!p||!p.alive||paused)return;
+if(!p||!p.alive||paused)return [];
 if(!auto)snapshot();commit(p);p.alive=false;p.endCap=false;
 if(rightMode)p.dir=snap(p.dir);
 var w=p.hw,nx=-Math.sin(p.dir),ny=Math.cos(p.dir),kids=[];
 for(var i=0;i<n;i++){
 var off=-w/2+w/(2*n)+i*w/n,side=i-(n-1)/2,d=rightMode?p.dir:p.dir+side*0.35;
 var k=newPipe(p.hx+nx*off,p.hy+ny*off,Math.max(4,w/n),d,p.layer);
-k.startCap=false;k.aimed=true;k.grace=w*1.5+20;k.turn=side*0.002;k.hue=(p.hue+side*28+360)%360;k.parent=p.id;
+k.startCap=false;k.aimed=true;k.grace=w*1.5+20;k.turn=side*0.002;k.hue=(p.hue+side*28+360)%360;k.parent=p.id;k.wander=p.wander;k.home=p.home!=null?p.home:p.dir;
 if(rightMode&&side!==0)k.pendingTurn=side<0?-Math.PI/2:Math.PI/2;
 p.kids.push(k.id);kids.push(k)}
 kids.forEach(function(k){k.family=[p.id].concat(p.family,kids.filter(function(o){return o!==k}).map(function(o){return o.id}));k.pc=p.pc||0});
@@ -494,7 +571,7 @@ k.hw=k.tw=k.pts[0].w=sw}
 else{k.lifeLeft=15+Math.random()*35;k.tw=Math.max(4,k.hw*0.6)}})}
 if(p===active||!auto){active=kids[0];syncSlider()}
 if(!auto){target=null;setStatus('Split made. Tap a blue dot to pick a branch, then drag to steer.')}
-dirty=true}
+dirty=true;return kids}
 
 function endPipeOf(p,auto){if(!p||!p.alive)return;if(!auto)snapshot();commit(p);p.alive=false;p.endCap=true;if(p===active){target=null;pickNextActive()}dirty=true}
 
@@ -527,18 +604,18 @@ return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,w:a.w+(b.w-a.w)*t,ang:Math.atan2(b.y
 function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath()}
 
 function drawCritter(c,cr,pts,now){
-var o=locate(pts,cr.d);if(o.w<6)return;
+var o=locate(pts,cr.d);if(o.w<0.6)return;
 var ang=o.ang+(cr.dir<0?Math.PI:0),cs=Math.cos(ang),sn=Math.sin(ang);
 if(cr.kind==='cars'||cr.kind==='player'){
 var big=cr.kind==='player',off=o.w*0.22,x=o.x-sn*off,y=o.y+cs*off;
-var Lc=big?Math.min(22,o.w*0.5):Math.min(16,o.w*0.42),Wc=big?Math.min(11,o.w*0.26):Math.min(8,o.w*0.2);
+var Lc=big?o.w*0.5:o.w*0.42,Wc=big?o.w*0.26:o.w*0.2;
 c.save();c.translate(x,y);c.rotate(ang);
 c.fillStyle=big?ACCENT:'hsl('+cr.hue+',65%,50%)';rrect(c,-Lc/2,-Wc/2,Lc,Wc,Wc*0.35);c.fill();
 if(big){c.lineWidth=Math.max(0.6,Wc*0.12);c.strokeStyle='#ffffff';c.stroke();c.fillStyle='#ffe58a';c.fillRect(Lc*0.42,-Wc*0.42,Lc*0.08,Wc*0.25);c.fillRect(Lc*0.42,Wc*0.17,Lc*0.08,Wc*0.25)}
 c.fillStyle='rgba(255,255,255,0.8)';c.fillRect(Lc*0.08,-Wc*0.32,Lc*0.18,Wc*0.64);c.restore()}
 else{
-var off2=cr.lane*o.w,x2=o.x-sn*off2,y2=o.y+cs*off2,r=Math.max(1.2,Math.min(3,o.w*0.08)),wig=Math.sin(now*0.02+cr.ph)*r*0.7;
-c.save();c.translate(x2,y2);c.rotate(ang);c.strokeStyle='#3b2a1f';c.lineWidth=0.8;c.beginPath();
+var off2=cr.lane*o.w,x2=o.x-sn*off2,y2=o.y+cs*off2,r=o.w*0.08,wig=Math.sin(now*0.02+cr.ph)*r*0.7;
+c.save();c.translate(x2,y2);c.rotate(ang);c.strokeStyle='#3b2a1f';c.lineWidth=r*0.35;c.beginPath();
 for(var k=-1;k<=1;k++){var sgn=k===0?1:-1;c.moveTo(k*r*1.3,0);c.lineTo(k*r*1.3+wig*sgn,-r*2.1);c.moveTo(k*r*1.3,0);c.lineTo(k*r*1.3-wig*sgn,r*2.1)}
 c.stroke();c.fillStyle='#3b2a1f';
 c.beginPath();c.arc(-r*1.4,0,r,0,Math.PI*2);c.fill();
@@ -653,10 +730,12 @@ critters.forEach(function(cr){(byPipe[cr.pid]=byPipe[cr.pid]||[]).push(cr)});
 if(car)(byPipe[car.pid]=byPipe[car.pid]||[]).push(car);
 pipes.forEach(function(p){
 var pts=pipePoints(p);if(pts.length<2)return;
-var gp=null,go=null;
-var bo=null;
+var gp=null,go=null,bo=null,o,ck=(iso?1:0)+crossStyle+pts.length+'|'+(p.crossings?p.crossings.length:0),cc0=!p.alive&&geoCache.get(p);
+if(cc0&&cc0.k===ck){pts=cc0.pts;gp=cc0.gp;go=cc0.go;bo=cc0.bo;o=cc0.o}
+else{
 if(iso){gp=pts;go=offsets(pts);var bp=[],tp=[];pts.forEach(function(q){var e=elevAt(p,q.d,q.w),u=-e*1.41421,ub=-Math.max(0,e-q.w*0.45)*1.41421;tp.push({x:q.x+u,y:q.y+u,w:q.w,l:q.l,d:q.d});bp.push({x:q.x+ub,y:q.y+ub,w:q.w,l:q.l,d:q.d})});pts=tp;bo=offsets(bp);bo.pts=bp}
-var o=offsets(pts),start=0,cr=(p.crossings||[]).filter(function(c){return !c.join});
+o=offsets(pts);if(!p.alive)geoCache.set(p,{k:ck,pts:pts,gp:gp,go:go,bo:bo,o:o})}
+var start=0,cr=(p.crossings||[]).filter(function(c){return !c.join});
 for(var k=1;k<pts.length;k++){
 var lay=pts[k].l,next=k+1<pts.length?pts[k+1].l:null;
 if(next!==lay){runs.push({p:p,a:start,b:k,layer:lay,L:o.L,R:o.R,N:o.N,pts:pts,gp:gp,go:go,bo:bo,cr:cr,last:pts.length-1,order:p.id*1e6+start});start=k}}});
@@ -706,8 +785,8 @@ if(bridgesOn())myCr.forEach(function(cc){if(cc.role==='over')drawBridge(c,r,cc,l
 
 function topUpCritters(){
 var total=0,list=[];
-pipes.forEach(function(p){var l=pipeLen(p);if(l>20&&p.hw>=6){list.push([p,l]);total+=l}});
-var want=Math.min(220,Math.floor(total/110));
+pipes.forEach(function(p){var l=pipeLen(p);if(l>4){list.push([p,l]);total+=l}});
+var want=Math.min(260,Math.floor(total/90));
 while(critters.length<want&&list.length){
 var pick=Math.random()*total,j=0;while(j<list.length-1&&pick>list[j][1]){pick-=list[j][1];j++}
 var p=list[j][0],l=list[j][1];
@@ -818,7 +897,7 @@ ctx.stroke()}
 if(rootMode)drawGround(ctx);
 drawArt(ctx,false,view.s,performance.now());
 ctx.setTransform(DPR,0,0,DPR,0,0);
-if(!driving){
+if(!driving&&editMode){
 pipes.forEach(function(p){if(!p.alive)return;var h=headScreen(p);
 ctx.beginPath();ctx.arc(h.x,h.y,9,0,Math.PI*2);ctx.fillStyle=p===active?ACCENT:'#ffffff';ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle=ACCENT;ctx.stroke()});
 if(!growing&&target&&active&&active.alive){var tp=proj(target.x,target.y);ctx.beginPath();ctx.arc(tp.x*view.s+view.x,tp.y*view.s+view.y,5,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle=ACCENT;ctx.stroke()}}}
@@ -841,6 +920,7 @@ if(!tiltLatch&&Math.abs(tg)>0.6){turnRA(active,active.dir+(tg>0?1:-1)*Math.PI/2)
 if(flowMode==='cars'||flowMode==='critters'){if(frameNo%30===0)topUpCritters();updateCritters();dirty=true}
 else if(flowMode==='water'){updateWater();dirty=true}
 if(rootMode){updateRoots();dirty=true}
+if(growing&&rotateSec>0&&performance.now()-rotT>rotateSec*1000){var rk=Object.keys(PRESETS).filter(function(k){return k!=='random'&&k!==$('rPreset').value&&(k!=='pattern'||pattern)}),nk=pick(rk);$('rPreset').value=nk;$('rPreset').onchange.call($('rPreset'));applyRules();setStatus('Rules switched to '+PRESET_NAMES[nk]+'.')}
 if(driving&&car){updateCar();dirty=true}
 if(frameNo%15===0)$('bPlay').classList.toggle('on',!!(active&&active.play&&!active.play.cycles));
 if(dirty){render();dirty=false}
@@ -867,7 +947,7 @@ if(paused||driving)return;
 var w=toWorld(s);
 if(mode==='place'||!active||!active.alive||(growing&&aliveCount()===0)){plantAt(w);return}
 if(growing)return;
-for(var i=0;i<pipes.length;i++){var p=pipes[i];if(!p.alive)continue;
+for(var i=0;i<pipes.length&&editMode;i++){var p=pipes[i];if(!p.alive)continue;
 var hs=headScreen(p),sx=hs.x,sy=hs.y;
 if(Math.hypot(sx-s.x,sy-s.y)<30){active=p;target=null;syncSlider();dirty=true;setStatus('Pipe picked. Drag to steer.');return}}
 if(steerMode)return;
@@ -905,8 +985,10 @@ cv.addEventListener('wheel',function(e){e.preventDefault();var s=pos(e);zoomAt(M
 
 wid.addEventListener('input',function(){if(active&&active.alive)active.tw=+wid.value});
 spd.addEventListener('input',function(){speed=+spd.value});
+function setEdit(v){editMode=v;$('bEdit').textContent='Edit dots: '+(v?'On':'Off');$('bEdit').classList.toggle('on',v);dirty=true}
+$('bEdit').onclick=function(){setEdit(!editMode)};
 $('bGrow').onclick=function(){
-growing=!growing;this.classList.toggle('on',growing);target=null;
+growing=!growing;this.classList.toggle('on',growing);target=null;setEdit(!growing);
 if(growing){snapshot();
 pipes.forEach(function(p){if(p.alive)p.aimed=true});
 if(!growOrigin&&!rootMode){var a=pipes.filter(function(p){return p.alive})[0];if(a)growOrigin={x:a.hx,y:a.hy}}
@@ -985,9 +1067,23 @@ $('bInk').onclick=function(){inkIdx=(inkIdx+1)%INKS.length;this.textContent='Lin
 $('bRules').onclick=function(){$('rules').style.display='flex'};
 $('rPreset').onchange=function(){var pr=PRESETS[this.value];if(!pr)return;$('rLean').value=pr[0];$('rWiggle').value=String(pr[1]);$('rSteps').value=pr[2]};
 $('rSteps').oninput=function(){$('rPreset').value='custom'};
+function applyRules(){rules.lean=$('rLean').value;rules.wiggle=$('rWiggle').value==='1';recipe=parseRecipe($('rSteps').value);rotateSec=+$('rRotate').value;rotT=performance.now();
+pipes.forEach(function(p){p.pc=0;p.left=null;p.arc=null})}
+function rnd(a,b){return a+Math.floor(Math.random()*(b-a+1))}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)]}
+function surprise(){
+if(Math.random()<0.4){var keys=Object.keys(PRESETS).filter(function(k){return k!=='random'&&(k!=='pattern'||pattern)});var k=pick(keys);$('rPreset').value=k;$('rPreset').onchange.call($('rPreset'));return PRESET_NAMES[k]}
+var ops=[function(){return 'split '+rnd(2,3)+(Math.random()<0.4?', kill 1':'')},function(){return 'fork '+rnd(15,70)},function(){return 'turn '+pick([-90,-60,-45,45,60,90])},function(){return 'arc '+pick([-180,-120,-90,-60,60,90,120,180])},function(){return 'spiral '+rnd(1,2)},function(){return 'bubble'},function(){return 'width '+rnd(60,130)},function(){return 'link'},function(){return 'merge'},function(){return 'burst '+rnd(3,7)},function(){return 'straighten'},function(){return 'sprout '+rnd(30,85)}];
+var parts=[];if(Math.random()<0.5)parts.push('wander '+pick([0,0,50,150,250]));
+var g=rnd(2,4);for(var i=0;i<g;i++){parts.push('grow '+rnd(30,150));parts.push(pick(ops)())}
+parts.push(Math.random()<0.8?'repeat':'end');
+$('rPreset').value='custom';$('rLean').value=pick(['free','free','up','down']);$('rWiggle').value=Math.random()<0.3?'1':'0';$('rSteps').value=parts.join(', ');return 'a new mix'}
+$('rSurprise').onclick=function(){var nm=surprise();setStatus('Surprise loaded: '+nm+'. Tap Done to use it.')};
+$('bSurprise').onclick=function(){var nm=surprise();applyRules();
+if(!growing)$('bGrow').onclick.call($('bGrow'));
+setStatus('Growing '+nm+': '+$('rSteps').value+(aliveCount()?'':'. Tap the paper to plant it.'))};
 $('rDone').onclick=function(){
-rules.lean=$('rLean').value;rules.wiggle=$('rWiggle').value==='1';recipe=parseRecipe($('rSteps').value);
-pipes.forEach(function(p){p.pc=0;p.left=null});
+applyRules();
 $('rules').style.display='none';
 setStatus(recipe.length?'Rules set. Tap Grow to watch them play out.':'Rules set. Grow will branch at random.')};
 $('bSteer').onclick=function(){
