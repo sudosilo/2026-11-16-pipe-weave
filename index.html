@@ -292,7 +292,7 @@ if(!paused)return;var p=paused.p;snapshot();applyChoice(p,kind,paused);
 paused=null;hideAsk()}
 
 function pickNextActive(){active=null;for(var i=pipes.length-1;i>=0;i--)if(pipes[i].alive){active=pipes[i];break}syncSlider()}
-function finishJoin(p){commit(p);p.alive=false;p.endCap=false;p.joinTo=null;if(p===active)pickNextActive();dirty=true}
+function finishJoin(p){commit(p);p.alive=false;p.endCap=false;p.joinTo=null;if(p===active){target=null;dragging=false;pickNextActive();setStatus('Joined. Tap a blue dot or drag to steer the next pipe.')}dirty=true}
 
 function split(p,n,auto){
 if(!p||!p.alive||paused)return;
