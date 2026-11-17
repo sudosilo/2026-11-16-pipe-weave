@@ -33,6 +33,8 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 <label>Speed <input id="spd" type="range" min="0.2" max="3" step="0.1" value="1"></label>
 </div>
 <div class="row">
+<button id="bGrow">Grow</button>
+<button id="bWeave">Weave: Ask me</button>
 <button id="bNew">New pipe</button>
 <button id="bS2">Split 2</button>
 <button id="bS3">Split 3</button>
@@ -54,11 +56,12 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 <script>
 (function(){
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-var PAPER='#eef1f4',GRID='#dfe5ec',INK='#2b3036',ACCENT='#2a5bd7',LINEW=2.2,CELL=64;
+var PAPER='#eef1f4',GRID='#dfe5ec',INK='#2b3036',ACCENT='#2a5bd7',LINEW=2.2,CELL=64,MAXHEADS=30;
 var DPR=Math.min(window.devicePixelRatio||1,2);
 var view={x:0,y:0,s:1};
 var pipes=[],active=null,target=null,paused=null,nextId=1,topL=0,botL=0,mode='draw',commits=0;
-var grid=new Map(),undoStack=[],dirty=true,speed=1;
+var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
+var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over'};
 var wid=document.getElementById('wid'),spd=document.getElementById('spd'),statusEl=document.getElementById('status'),ask=document.getElementById('ask');
 
 function setStatus(t){statusEl.textContent=t}
@@ -66,9 +69,10 @@ function resize(){var r=cv.getBoundingClientRect();cv.width=Math.max(1,Math.roun
 window.addEventListener('resize',resize);
 
 function newPipe(x,y,w,dir,layer){
-var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false};
+var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0};
 pipes.push(p);return p}
 function byId(id){for(var i=0;i<pipes.length;i++)if(pipes[i].id===id)return pipes[i];return null}
+function aliveCount(){var n=0;for(var i=0;i<pipes.length;i++)if(pipes[i].alive)n++;return n}
 
 function addSeg(p,i){
 var a=p.pts[i],b=p.pts[i+1],r=Math.max(a.w,b.w)/2;
@@ -80,7 +84,7 @@ function rebuildGrid(){grid=new Map();pipes.forEach(function(p){for(var i=0;i<p.
 function segDist(px,py,a,b){
 var vx=b.x-a.x,vy=b.y-a.y,L=vx*vx+vy*vy,t=L?((px-a.x)*vx+(py-a.y)*vy)/L:0;
 t=Math.max(0,Math.min(1,t));var qx=a.x+vx*t,qy=a.y+vy*t;
-return {d:Math.hypot(px-qx,py-qy),x:qx,y:qy}}
+return {d:Math.hypot(px-qx,py-qy),x:qx,y:qy,t:t}}
 
 function hits(p,x,y,w){
 var r=w/2,ids=[],best=null,seen=new Set();
@@ -93,7 +97,8 @@ var a=q.pts[ref.i],b=q.pts[ref.i+1];if(!a||!b)continue;
 if(q===p&&p.headD-b.d<p.hw*1.2+16)continue;
 if(q!==p&&p.family.indexOf(q.id)>=0&&p.traveled<p.grace)continue;
 var s=segDist(x,y,a,b),half=(a.w+b.w)/4;
-if(s.d<half+r-1){if(ids.indexOf(q.id)<0)ids.push(q.id);if(!best||s.d<best.d)best=s}}}
+if(s.d<half+r-1){if(ids.indexOf(q.id)<0)ids.push(q.id);
+if(!best||s.d<best.d)best={d:s.d,x:s.x,y:s.y,q:q,qd:a.d+s.t*(b.d-a.d)}}}}
 return {ids:ids,best:best}}
 
 function commit(p){
@@ -101,62 +106,107 @@ var last=p.pts[p.pts.length-1];
 if(Math.hypot(p.hx-last.x,p.hy-last.y)<0.01)return;
 p.pts.push({x:p.hx,y:p.hy,w:p.hw,l:p.layer,d:p.headD});
 addSeg(p,p.pts.length-2);
-commits++;if(commits%80===0)snapshot()}
+commits++;if(commits%(growing?400:80)===0)snapshot()}
 
 function angDiff(a,b){var d=a-b;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
+function opp(r){return r==='over'?'under':'over'}
+function coin(){return Math.random()<0.5?'over':'under'}
 
-function step(){
-var p=active;if(!p||!p.alive||paused)return false;
-var tx,ty;
-if(p.joinTo){tx=p.joinTo.x;ty=p.joinTo.y}else if(target){tx=target.x;ty=target.y}else return false;
-var dx=tx-p.hx,dy=ty-p.hy,dist=Math.hypot(dx,dy);
-if(dist<1){if(p.joinTo)finishJoin(p);return true}
-var want=Math.atan2(dy,dx);
+function decideAlternate(p,best){
+var lastP=null;
+p.crossings.forEach(function(c){if(c.d<=p.headD&&(!lastP||c.d>lastP.d))lastP=c});
+var pWant=lastP?opp(lastP.role):null,fromQ=null;
+if(best&&best.q){
+var q=best.q,qd=best.qd,before=null,after=null;
+q.crossings.forEach(function(c){
+if(c.d<qd){if(!before||c.d>before.d)before=c}
+else if(c.d>qd){if(!after||c.d<after.d)after=c}});
+var qRole=null;
+if(before&&after){if(before.role===after.role)qRole=opp(before.role)}
+else if(before)qRole=opp(before.role);
+else if(after)qRole=opp(after.role);
+if(qRole)fromQ=opp(qRole)}
+if(pWant&&fromQ)return pWant===fromQ?pWant:fromQ;
+return pWant||fromQ||coin()}
+
+function applyChoice(p,kind,info){
+commit(p);
+var role=kind==='join'?'under':kind;
+if(kind==='over')p.layer=++topL;else p.layer=--botL;
+p.crossings.push({d:p.headD,role:role});
+if(kind!=='join'&&info.best&&info.best.q)info.best.q.crossings.push({d:info.best.qd,role:opp(role)});
+info.ids.forEach(function(id){if(p.passing.indexOf(id)<0)p.passing.push(id)});
+if(kind==='join'&&info.best)p.joinTo={x:info.best.x,y:info.best.y};
+dirty=true}
+
+function stepPipe(p){
+if(!p||!p.alive||paused)return false;
+var len=speed,rad=p.hw*0.55+8,want,dist=Infinity;
+if(p.joinTo){
+var jx=p.joinTo.x-p.hx,jy=p.joinTo.y-p.hy;dist=Math.hypot(jx,jy);
+if(dist<1){finishJoin(p);return true}
+p.dir=Math.atan2(jy,jx);len=Math.min(len,dist)}
+else if(growing){
+p.turn+=(Math.random()-0.5)*0.004*len;
+var lim=1/(rad*1.5);p.turn=Math.max(-lim,Math.min(lim,p.turn))*0.995;
+p.dir+=p.turn*len;
+if(growOrigin){var ox=growOrigin.x-p.hx,oy=growOrigin.y-p.hy,od=Math.hypot(ox,oy);
+if(od>1400){var pull=angDiff(Math.atan2(oy,ox),p.dir);p.dir+=Math.max(-0.01,Math.min(0.01,pull))*len}}}
+else{
+if(!target||p!==active)return false;
+var dx=target.x-p.hx,dy=target.y-p.hy;dist=Math.hypot(dx,dy);
+if(dist<1)return false;
+want=Math.atan2(dy,dx);
 if(!p.aimed){p.dir=want;p.aimed=true}
-var da=angDiff(want,p.dir),len=Math.min(speed,dist),rad=p.hw*0.55+8;
-if(!p.joinTo&&dist<rad*1.6&&Math.abs(da)>0.9)return false;
-if(!p.joinTo){
+var da=angDiff(want,p.dir);
+if(dist<rad*1.6&&Math.abs(da)>0.9)return false;
+len=Math.min(len,dist);
+var maxTurn=len/rad;p.dir+=Math.max(-maxTurn,Math.min(maxTurn,da))}
+if(!p.joinTo&&weaveMode==='ask'){
 var ax=p.hx+Math.cos(p.dir)*(p.hw*0.5+10),ay=p.hy+Math.sin(p.dir)*(p.hw*0.5+10);
 var ah=hits(p,ax,ay,p.hw);
 for(var i=0;i<ah.ids.length;i++)if(p.passing.indexOf(ah.ids[i])<0){len*=0.35;break}}
-var maxTurn=p.joinTo?Math.PI:len/rad;
-p.dir+=Math.max(-maxTurn,Math.min(maxTurn,da));
 var nx=p.hx+Math.cos(p.dir)*len,ny=p.hy+Math.sin(p.dir)*len;
 var dw=p.tw-p.hw,nw=p.hw+Math.max(-len*0.5,Math.min(len*0.5,dw));
 if(!p.joinTo){
 var h=hits(p,nx,ny,nw),fresh=h.ids.filter(function(id){return p.passing.indexOf(id)<0});
-if(fresh.length){paused={p:p,ids:h.ids,best:h.best};showAsk();return true}
-p.passing=h.ids}
-p.hx=nx;p.hy=ny;p.hw=nw;p.traveled+=len;p.headD+=len;
+if(fresh.length){
+if(weaveMode==='ask'){paused={p:p,ids:h.ids,best:h.best};showAsk();return true}
+applyChoice(p,weaveMode==='random'?coin():decideAlternate(p,h.best),h)}
+var keep=h.ids.slice();p.passing.forEach(function(id){if(fresh.length&&keep.indexOf(id)<0&&h.ids.indexOf(id)>=0)keep.push(id)});
+p.passing=keep}
+p.hx=nx;p.hy=ny;p.hw=nw;p.traveled+=len;p.headD+=len;p.sinceSplit+=len;
 var last=p.pts[p.pts.length-1];
 if(Math.hypot(nx-last.x,ny-last.y)>=4||Math.abs(nw-last.w)>2)commit(p);
+if(growing&&!p.joinTo){
+if(p.sinceSplit>90&&p.hw>=16&&aliveCount()<MAXHEADS&&Math.random()<len/260){split(p,Math.random()<0.25?3:2,true);return true}
+if(p.hw<10&&p.traveled>120&&Math.random()<len/700){endPipeOf(p,true)}}
 return true}
 
 function showAsk(){ask.style.display='flex';setStatus('Choose Over, Under, or Join.')}
-function hideAsk(){ask.style.display='none';setStatus('Drag to steer. Tap a blue dot to switch pipes.')}
+function hideAsk(){ask.style.display='none';setStatus(growing?'Growing.':'Drag to steer. Tap a blue dot to switch pipes.')}
 
 function choose(kind){
-if(!paused)return;var p=paused.p;snapshot();commit(p);
-if(kind==='over')p.layer=++topL;else p.layer=--botL;
-paused.ids.forEach(function(id){if(p.passing.indexOf(id)<0)p.passing.push(id)});
-if(kind==='join'&&paused.best)p.joinTo={x:paused.best.x,y:paused.best.y};
-paused=null;hideAsk();dirty=true}
+if(!paused)return;var p=paused.p;snapshot();applyChoice(p,kind,paused);
+paused=null;hideAsk()}
 
 function pickNextActive(){active=null;for(var i=pipes.length-1;i>=0;i--)if(pipes[i].alive){active=pipes[i];break}syncSlider()}
-function finishJoin(p){commit(p);p.alive=false;p.endCap=false;p.joinTo=null;pickNextActive();dirty=true}
+function finishJoin(p){commit(p);p.alive=false;p.endCap=false;p.joinTo=null;if(p===active)pickNextActive();dirty=true}
 
-function split(n){
-var p=active;if(!p||!p.alive||paused)return;
-snapshot();commit(p);p.alive=false;p.endCap=false;
+function split(p,n,auto){
+if(!p||!p.alive||paused)return;
+if(!auto)snapshot();commit(p);p.alive=false;p.endCap=false;
 var w=p.hw,nx=-Math.sin(p.dir),ny=Math.cos(p.dir),kids=[];
 for(var i=0;i<n;i++){
 var off=-w/2+w/(2*n)+i*w/n,d=p.dir+(i-(n-1)/2)*0.35;
 var k=newPipe(p.hx+nx*off,p.hy+ny*off,Math.max(6,w/n),d,p.layer);
-k.startCap=false;k.aimed=true;k.grace=w*1.5+20;kids.push(k)}
+k.startCap=false;k.aimed=true;k.grace=w*1.5+20;k.turn=(i-(n-1)/2)*0.002;kids.push(k)}
 kids.forEach(function(k){k.family=[p.id].concat(p.family,kids.filter(function(o){return o!==k}).map(function(o){return o.id}))});
-active=kids[0];target=null;syncSlider();dirty=true;setStatus('Split made. Tap a blue dot to pick a branch, then drag to steer.')}
+if(p===active||!auto){active=kids[0];syncSlider()}
+if(!auto){target=null;setStatus('Split made. Tap a blue dot to pick a branch, then drag to steer.')}
+dirty=true}
 
-function endPipe(){var p=active;if(!p||!p.alive||paused)return;snapshot();commit(p);p.alive=false;p.endCap=true;target=null;pickNextActive();dirty=true}
+function endPipeOf(p,auto){if(!p||!p.alive)return;if(!auto)snapshot();commit(p);p.alive=false;p.endCap=true;if(p===active){target=null;pickNextActive()}dirty=true}
 
 function snapshot(){undoStack.push(JSON.stringify({pipes:pipes,a:active?active.id:0,topL:topL,botL:botL,nextId:nextId}));if(undoStack.length>50)undoStack.shift()}
 function undo(){
@@ -201,7 +251,7 @@ if(withHeads){
 pipes.forEach(function(p){if(!p.alive)return;
 c.beginPath();c.arc(p.hx,p.hy,9/sc,0,Math.PI*2);
 c.fillStyle=p===active?ACCENT:'#ffffff';c.fill();c.lineWidth=2.5/sc;c.strokeStyle=ACCENT;c.stroke()});
-if(target&&active&&active.alive){c.beginPath();c.arc(target.x,target.y,5/sc,0,Math.PI*2);c.lineWidth=2/sc;c.strokeStyle=ACCENT;c.stroke()}}}
+if(!growing&&target&&active&&active.alive){c.beginPath();c.arc(target.x,target.y,5/sc,0,Math.PI*2);c.lineWidth=2/sc;c.strokeStyle=ACCENT;c.stroke()}}}
 
 function render(){
 ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle=PAPER;ctx.fillRect(0,0,cv.width,cv.height);
@@ -214,7 +264,16 @@ ctx.stroke()}
 ctx.setTransform(DPR*view.s,0,0,DPR*view.s,DPR*view.x,DPR*view.y);
 drawArt(ctx,true,view.s)}
 
-function loop(){if(step())dirty=true;if(dirty){render();dirty=false}requestAnimationFrame(loop)}
+function loop(){
+var moved=false;
+if(growing){
+var list=pipes.slice();
+for(var i=0;i<list.length;i++){if(paused)break;if(list[i].alive&&stepPipe(list[i]))moved=true}
+if(!paused&&aliveCount()===0){growing=false;document.getElementById('bGrow').classList.remove('on');setStatus('Growth finished. Tap the paper to start a pipe.')}}
+else if(stepPipe(active))moved=true;
+if(moved)dirty=true;
+if(dirty){render();dirty=false}
+requestAnimationFrame(loop)}
 
 function pos(e){var r=cv.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
 function toWorld(s){return {x:(s.x-view.x)/view.s,y:(s.y-view.y)/view.s}}
@@ -226,12 +285,15 @@ cv.setPointerCapture(e.pointerId);var s=pos(e);ptrs.set(e.pointerId,s);
 if(ptrs.size===2){dragging=false;var pi=pinchInfo();pinch={mx:pi.mx,my:pi.my,d:pi.d,v:{x:view.x,y:view.y,s:view.s}};return}
 if(ptrs.size>2||paused)return;
 var w=toWorld(s);
+if(mode==='place'||!active||!active.alive||(growing&&aliveCount()===0)){
+snapshot();active=newPipe(w.x,w.y,+wid.value,Math.random()*Math.PI*2,++topL);active.aimed=growing;target=null;mode='draw';
+if(growing&&!growOrigin)growOrigin={x:w.x,y:w.y};
+document.getElementById('bNew').classList.remove('on');syncSlider();dirty=true;
+setStatus(growing?'Growing.':'Drag to steer. Tap a blue dot to switch pipes.');return}
+if(growing)return;
 for(var i=0;i<pipes.length;i++){var p=pipes[i];if(!p.alive)continue;
 var sx=p.hx*view.s+view.x,sy=p.hy*view.s+view.y;
 if(Math.hypot(sx-s.x,sy-s.y)<30){active=p;target=null;syncSlider();dirty=true;setStatus('Pipe picked. Drag to steer.');return}}
-if(mode==='place'||!active||!active.alive){
-snapshot();active=newPipe(w.x,w.y,+wid.value,0,++topL);target=null;mode='draw';
-document.getElementById('bNew').classList.remove('on');syncSlider();dirty=true;setStatus('Drag to steer. Tap a blue dot to switch pipes.');return}
 target=w;dragging=true;dirty=true});
 
 cv.addEventListener('pointermove',function(e){
@@ -239,7 +301,7 @@ if(!ptrs.has(e.pointerId))return;var s=pos(e);ptrs.set(e.pointerId,s);
 if(pinch&&ptrs.size===2){var pi=pinchInfo(),ns=Math.max(0.08,Math.min(5,pinch.v.s*pi.d/pinch.d));
 var wx=(pinch.mx-pinch.v.x)/pinch.v.s,wy=(pinch.my-pinch.v.y)/pinch.v.s;
 view.s=ns;view.x=pi.mx-wx*ns;view.y=pi.my-wy*ns;dirty=true;return}
-if(dragging&&ptrs.size===1){target=toWorld(s);dirty=true}});
+if(dragging&&ptrs.size===1&&!growing){target=toWorld(s);dirty=true}});
 
 function up(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(ptrs.size===0)dragging=false}
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
@@ -248,15 +310,24 @@ var wx=(s.x-view.x)/view.s,wy=(s.y-view.y)/view.s;view.s=ns;view.x=s.x-wx*ns;vie
 
 wid.addEventListener('input',function(){if(active&&active.alive)active.tw=+wid.value});
 spd.addEventListener('input',function(){speed=+spd.value});
+document.getElementById('bGrow').onclick=function(){
+growing=!growing;this.classList.toggle('on',growing);target=null;
+if(growing){snapshot();
+pipes.forEach(function(p){if(p.alive)p.aimed=true});
+if(!growOrigin){var a=pipes.filter(function(p){return p.alive})[0];if(a)growOrigin={x:a.hx,y:a.hy}}
+setStatus(aliveCount()?'Growing.':'Tap the paper to plant a pipe.')}
+else setStatus('Grow stopped. Drag to steer. Tap a blue dot to switch pipes.')};
+document.getElementById('bWeave').onclick=function(){
+weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':'ask';this.textContent=WEAVE_NAMES[weaveMode]};
 document.getElementById('bNew').onclick=function(){if(paused)return;mode='place';this.classList.add('on');setStatus('Tap where the new pipe starts.')};
-document.getElementById('bS2').onclick=function(){split(2)};
-document.getElementById('bS3').onclick=function(){split(3)};
-document.getElementById('bEnd').onclick=endPipe;
+document.getElementById('bS2').onclick=function(){split(active,2,false)};
+document.getElementById('bS3').onclick=function(){split(active,3,false)};
+document.getElementById('bEnd').onclick=function(){if(!paused)endPipeOf(active,false)};
 document.getElementById('bUndo').onclick=undo;
 document.getElementById('aOver').onclick=function(){choose('over')};
 document.getElementById('aUnder').onclick=function(){choose('under')};
 document.getElementById('aJoin').onclick=function(){choose('join')};
-document.getElementById('bClear').onclick=function(){if(!confirm('Clear the whole drawing?'))return;snapshot();pipes=[];active=null;target=null;paused=null;ask.style.display='none';grid=new Map();dirty=true;setStatus('Tap the paper to start a pipe.')};
+document.getElementById('bClear').onclick=function(){if(!confirm('Clear the whole drawing?'))return;snapshot();pipes=[];active=null;target=null;paused=null;growOrigin=null;ask.style.display='none';grid=new Map();dirty=true;setStatus('Tap the paper to start a pipe.')};
 document.getElementById('bSave').onclick=function(){
 var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
 pipes.forEach(function(p){pipePoints(p).forEach(function(q){var h=q.w/2+4;minX=Math.min(minX,q.x-h);minY=Math.min(minY,q.y-h);maxX=Math.max(maxX,q.x+h);maxY=Math.max(maxY,q.y+h)})});
