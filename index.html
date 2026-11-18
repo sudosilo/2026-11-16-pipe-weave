@@ -169,6 +169,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <option value="nautilus">Nautilus</option>
 <option value="willow">Willow</option>
 <option value="crystal">Crystal</option>
+<option value="neighborhood">Neighborhood</option>
 <option value="pattern">Your pattern</option>
 <option value="custom">Custom</option>
 </select></label>
@@ -190,7 +191,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <label class="f">Steps <input id="rSteps" type="text" placeholder="xxxxxxxx"></label>
 <button id="rSurprise">Surprise me</button>
 <p class="hint">How to write steps. Steps run in order from left to right, separated by commas, and every branch follows them on its own. A number after a step changes it.</p>
-<p class="hint">Grow 100 travels that far before the next step. Split 3 divides the branch into three side by side. Kill 2 right after a split cuts two of those new branches short as stubs. Fork 40 splits into two branches that spread apart 40 degrees each way. Burst 6 shoots six branches out evenly in every direction like a star. Sprout 60 keeps the branch going and pushes out a short twig on each side at 60 degrees.</p>
+<p class="hint">Grow 100 travels that far before the next step. Split 3 divides the branch into three side by side. Kill 2 right after a split cuts two of those new branches short as stubs. Fork 40 splits into two branches that spread apart 40 degrees each way. Burst 6 shoots six branches out evenly in every direction like a star. Sprout 60 keeps the branch going and pushes out a short straight twig on each side at 60 degrees.</p>
 <p class="hint">Turn 90 makes a sharp corner, and a negative number like turn -90 turns the other way. Arc 90 bends smoothly through that many degrees. Spiral 2 curls inward two full turns. Straighten points the branch back to the direction it started in. Wander 0 makes perfectly straight lines, wander 100 is normal, and wander 300 is jittery.</p>
 <p class="hint">Width 70 shrinks the branch to 70 percent, and width 150 swells it. Bubble makes a round bulge. Pattern 2 plays your recorded pattern twice. Merge sends the branch into its nearest neighbor and joins it. Link keeps the branch going and sends a connector over to its neighbor. End stops the branch. Repeat starts the steps over, and repeat 3 jumps back to step 3.</p>
 <p class="hint">Example: wander 0, grow 140, fork 25, grow 120, fork 25, grow 100, arc 60, end makes the Cathedral preset.</p>
@@ -252,8 +253,9 @@ spine:['free',0,'wander 0'+', grow 30, sprout 85'.repeat(12)+', grow 40, end'],
 city:['free',0,'wander 0, burst 4, grow 120, fork 90, grow 90, fork 90, grow 60, fork 90, grow 40, end'],
 nautilus:['free',0,'spiral 3, grow 100, burst 3, spiral 2, end'],
 willow:['up',1,'grow 120, burst 5, arc 160, grow 120, end'],
-crystal:['free',0,'wander 0, grow 50, fork 30, grow 40, fork 30, grow 30, fork 30, end']};
-var PRESET_NAMES={tree:'Tree',pine:'Pine',roots:'Roots',coral:'Coral',vine:'Spiral vine',bubbles:'Bubbles',lattice:'Lattice',diamonds:'Diamond chain',fan:'Fan',cathedral:'Cathedral',stairs:'Staircase',zigzag:'Zigzag',lightning:'Lightning',honeycomb:'Honeycomb',tentacles:'Tentacles',rose:'Rose',circuit:'Circuit board',kelp:'Kelp forest',mycelium:'Mycelium',snowflake:'Snowflake',fireworks:'Fireworks',labyrinth:'Labyrinth',waves:'Waves',bloom:'Bloom',canopy:'Canopy',coil:'Coil',starburst:'Starburst',ribcage:'Ribcage',fern:'Fern',spine:'Spine',city:'City grid',nautilus:'Nautilus',willow:'Willow',crystal:'Crystal',pattern:'Your pattern'};
+crystal:['free',0,'wander 0, grow 50, fork 30, grow 40, fork 30, grow 30, fork 30, end'],
+neighborhood:['free',0,'burst 3, wander 60, grow 45, sprout 90, repeat 3']};
+var PRESET_NAMES={tree:'Tree',pine:'Pine',roots:'Roots',coral:'Coral',vine:'Spiral vine',bubbles:'Bubbles',lattice:'Lattice',diamonds:'Diamond chain',fan:'Fan',cathedral:'Cathedral',stairs:'Staircase',zigzag:'Zigzag',lightning:'Lightning',honeycomb:'Honeycomb',tentacles:'Tentacles',rose:'Rose',circuit:'Circuit board',kelp:'Kelp forest',mycelium:'Mycelium',snowflake:'Snowflake',fireworks:'Fireworks',labyrinth:'Labyrinth',waves:'Waves',bloom:'Bloom',canopy:'Canopy',coil:'Coil',starburst:'Starburst',ribcage:'Ribcage',fern:'Fern',spine:'Spine',city:'City grid',nautilus:'Nautilus',willow:'Willow',crystal:'Crystal',neighborhood:'Neighborhood',pattern:'Your pattern'};
 var editMode=true,rotateSec=0,rotT=0;
 var geoCache=new WeakMap();
 function inkColor(){return INKS[inkIdx][1]||TH.ink}
@@ -439,7 +441,7 @@ if(st.op==='pattern'){if(pattern)p.play={pos:0,base:p.hw,cycles:st.n};return}
 if(st.op==='end'){endPipeOf(p,true);return}
 if(st.op==='turn'){commit(p);p.dir+=st.n*Math.PI/180;if(rightMode)p.dir=snap(p.dir);p.runLen=0;continue}
 if(st.op==='arc'){if(rightMode){commit(p);p.dir=snap(p.dir+st.n*Math.PI/180);continue}p.arc={left:Math.abs(st.n)*Math.PI/180,r:Math.max(30,p.hw*1.5),sign:st.n<0?-1:1};return}
-if(st.op==='sprout'){var sa=st.n*Math.PI/180;[-1,1].forEach(function(sg){if(aliveCount()>=MAXHEADS)return;var k=newPipe(p.hx,p.hy,Math.max(3,p.hw*0.5),p.dir+sg*sa,p.layer);k.startCap=false;k.aimed=true;k.family=[p.id].concat(p.family);k.grace=p.hw*1.5+20;k.lifeLeft=p.hw*2.5+30;k.wander=p.wander;k.hue=p.hue;k.tw=Math.max(2,k.hw*0.6)});continue}
+if(st.op==='sprout'){var sa=st.n*Math.PI/180;[-1,1].forEach(function(sg){if(aliveCount()>=MAXHEADS)return;var k=newPipe(p.hx,p.hy,Math.max(3,p.hw*0.5),p.dir+sg*sa,p.layer);k.startCap=false;k.aimed=true;k.family=[p.id].concat(p.family);k.grace=p.hw*1.5+20;k.lifeLeft=p.hw*2.5+30;k.wander=0;k.turn=0;k.home=k.dir;k.hue=p.hue;k.tw=Math.max(2,k.hw*0.6)});continue}
 if(st.op==='width'){p.tw=Math.max(3,Math.min(240,p.hw*st.n/100));continue}
 if(st.op==='wander'){p.wander=Math.max(0,st.n)/100;if(p.wander===0)p.turn=0;continue}
 if(st.op==='straighten'){commit(p);p.dir=p.home!=null?p.home:p.dir;if(rightMode)p.dir=snap(p.dir);continue}
@@ -472,7 +474,7 @@ else if(rightMode){p.dir=snap(p.dir);growTurnRA(p,minRun)}
 else{
 var lean=rootMode?'down':rules.lean,g,pullK=rootMode?0.003:0.012;
 var wd=p.wander==null?1:p.wander;p.turn+=(Math.random()-0.5)*(lean==='free'||rootMode?0.004:0.0015)*len*wd;if(wd===0)p.turn=0;
-var lim=1/(rad*1.5);p.turn=Math.max(-lim,Math.min(lim,p.turn))*0.995;
+var lim=1/(rad*1.5);p.turn=Math.max(-lim,Math.min(lim,p.turn))*(wd<1?0.97:0.995);
 p.dir+=p.turn*len;
 if(lean==='down'){g=angDiff(Math.PI/2,p.dir);p.dir+=Math.max(-pullK,Math.min(pullK,g*0.02))*len}
 else if(lean==='up'){g=angDiff(-Math.PI/2,p.dir);p.dir+=Math.max(-pullK,Math.min(pullK,g*0.02))*len}
