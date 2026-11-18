@@ -170,6 +170,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <option value="willow">Willow</option>
 <option value="crystal">Crystal</option>
 <option value="neighborhood">Neighborhood</option>
+<option value="cityscape">Cityscape</option>
 <option value="pattern">Your pattern</option>
 <option value="custom">Custom</option>
 </select></label>
@@ -254,13 +255,14 @@ city:['free',0,'wander 0, burst 4, grow 120, fork 90, grow 90, fork 90, grow 60,
 nautilus:['free',0,'spiral 3, grow 100, burst 3, spiral 2, end'],
 willow:['up',1,'grow 120, burst 5, arc 160, grow 120, end'],
 crystal:['free',0,'wander 0, grow 50, fork 30, grow 40, fork 30, grow 30, fork 30, end'],
-neighborhood:['free',0,'burst 3, wander 60, grow 45, sprout 90, repeat 3']};
-var PRESET_NAMES={tree:'Tree',pine:'Pine',roots:'Roots',coral:'Coral',vine:'Spiral vine',bubbles:'Bubbles',lattice:'Lattice',diamonds:'Diamond chain',fan:'Fan',cathedral:'Cathedral',stairs:'Staircase',zigzag:'Zigzag',lightning:'Lightning',honeycomb:'Honeycomb',tentacles:'Tentacles',rose:'Rose',circuit:'Circuit board',kelp:'Kelp forest',mycelium:'Mycelium',snowflake:'Snowflake',fireworks:'Fireworks',labyrinth:'Labyrinth',waves:'Waves',bloom:'Bloom',canopy:'Canopy',coil:'Coil',starburst:'Starburst',ribcage:'Ribcage',fern:'Fern',spine:'Spine',city:'City grid',nautilus:'Nautilus',willow:'Willow',crystal:'Crystal',neighborhood:'Neighborhood',pattern:'Your pattern'};
+neighborhood:['free',0,'burst 3, wander 60, grow 45, sprout 90, repeat 3'],
+cityscape:['free',0,'wander 0, burst 4, grow 70, sprout 90, grow 70, sprout 90, grow 70, fork 90, width 110, repeat 3']};
+var PRESET_NAMES={tree:'Tree',pine:'Pine',roots:'Roots',coral:'Coral',vine:'Spiral vine',bubbles:'Bubbles',lattice:'Lattice',diamonds:'Diamond chain',fan:'Fan',cathedral:'Cathedral',stairs:'Staircase',zigzag:'Zigzag',lightning:'Lightning',honeycomb:'Honeycomb',tentacles:'Tentacles',rose:'Rose',circuit:'Circuit board',kelp:'Kelp forest',mycelium:'Mycelium',snowflake:'Snowflake',fireworks:'Fireworks',labyrinth:'Labyrinth',waves:'Waves',bloom:'Bloom',canopy:'Canopy',coil:'Coil',starburst:'Starburst',ribcage:'Ribcage',fern:'Fern',spine:'Spine',city:'City grid',nautilus:'Nautilus',willow:'Willow',crystal:'Crystal',neighborhood:'Neighborhood',cityscape:'Cityscape',pattern:'Your pattern'};
 var editMode=true,rotateSec=0,rotT=0;
 var geoCache=new WeakMap();
 function inkColor(){return INKS[inkIdx][1]||TH.ink}
 var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
-var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over'};
+var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over',join:'Weave: Join'};
 var wid=document.getElementById('wid'),spd=document.getElementById('spd'),statusEl=document.getElementById('status'),ask=document.getElementById('ask');
 function $(id){return document.getElementById(id)}
 
@@ -528,6 +530,7 @@ var h=hits(p,nx,ny,nw),fresh=h.ids.filter(function(id){return p.passing.indexOf(
 if(fresh.length){
 if(p.mergeInto!=null){p.mergeInto=null;if(!p.link)p.feeds=true;applyChoice(p,'join',h);p.passing=h.ids.slice();return true}
 if(weaveMode==='ask'){paused={p:p,ids:h.ids,best:h.best};showAsk();return true}
+if(weaveMode==='join'){applyChoice(p,'join',h);p.passing=h.ids.slice();return true}
 applyChoice(p,weaveMode==='random'?coin():decideAlternate(p,h.best),h)}
 p.passing=h.ids.slice()}
 p.hx=nx;p.hy=ny;p.hw=nw;p.traveled+=len;p.headD+=len;p.sinceSplit+=len;p.runLen+=len;
@@ -996,7 +999,7 @@ pipes.forEach(function(p){if(p.alive)p.aimed=true});
 if(!growOrigin&&!rootMode){var a=pipes.filter(function(p){return p.alive})[0];if(a)growOrigin={x:a.hx,y:a.hy}}
 setStatus(aliveCount()?'Growing.':'Tap the paper to plant a pipe.')}
 else setStatus('Grow stopped. Drag to steer. Tap a blue dot to switch pipes.')};
-$('bWeave').onclick=function(){weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':'ask';this.textContent=WEAVE_NAMES[weaveMode]};
+$('bWeave').onclick=function(){weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':weaveMode==='alternate'?'join':'ask';this.textContent=WEAVE_NAMES[weaveMode]};
 $('bAngle').onclick=function(){rightMode=!rightMode;this.textContent=rightMode?'Shape: Right angles':'Shape: Curvy';this.classList.toggle('on',rightMode);
 pipes.forEach(function(p){if(p.alive){commit(p);p.runLen=0;if(rightMode)p.dir=snap(p.dir)}});target=null;dirty=true};
 $('bRoots').onclick=function(){
