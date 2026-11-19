@@ -401,6 +401,10 @@ function snap(a){var q=Math.PI/2;return Math.round(a/q)*q}
 function opp(r){return r==='over'?'under':'over'}
 function coin(){return Math.random()<0.5?'over':'under'}
 function turnRA(p,to){commit(p);p.dir=snap(to);p.runLen=0}
+var isoLock=false;
+function isoAxes(){return iso?[0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*5/4,Math.PI*3/2]:[-Math.PI/2,-Math.PI/6,Math.PI/6,Math.PI/2,Math.PI*5/6,Math.PI*7/6]}
+function isoSnap(a){var best=a,bd=9;isoAxes().forEach(function(t){var d=Math.abs(angDiff(a,t));if(d<bd){bd=d;best=t}});return best}
+function isoNext(a,step){var ax=isoAxes(),cur=isoSnap(a),i=0;for(var k=0;k<ax.length;k++)if(Math.abs(angDiff(ax[k],cur))<1e-6)i=k;return ax[(i+step+ax.length)%ax.length]}
 
 function decideAlternate(p,best){
 var lastP=null;
@@ -611,14 +615,22 @@ if(p!==active)return false;
 if(progSteer(p,len)){p.aimed=true}
 else if(steerMode){
 if(!steerGo)return false;
-if(!rightMode){var ti=steerInput();p.dir+=ti*len/rad}
+if(isoLock&&!rightMode)p.dir=isoSnap(p.dir);else if(!rightMode){var ti=steerInput();p.dir+=ti*len/rad}
 p.aimed=true}
 else if(p.bubble&&!target){p.aimed=true}
 else{
 if(!target)return false;
 var dx=target.x-p.hx,dy=target.y-p.hy;dist=Math.hypot(dx,dy);
 if(dist<1)return false;
-if(rightMode){
+if(isoLock&&!rightMode){
+var wI=Math.atan2(dy,dx),cand=isoSnap(wI),cur=isoSnap(p.dir);
+if(!p.aimed){p.dir=cand;p.aimed=true;p.runLen=0}
+else{p.dir=cur;var curAl=Math.cos(angDiff(wI,cur)),candAl=Math.cos(angDiff(wI,cand));
+if(Math.abs(angDiff(cand,cur))>1e-6&&(curAl<0.2||(p.runLen>=minRun&&candAl>curAl+0.15))){commit(p);p.dir=cand;p.runLen=0}}
+var alI=dx*Math.cos(p.dir)+dy*Math.sin(p.dir);
+if(alI<=0.5)return false;
+len=Math.min(len,alI)}
+else if(rightMode){
 if(!p.aimed){p.dir=Math.abs(dx)>=Math.abs(dy)?(dx>=0?0:Math.PI):(dy>=0?Math.PI/2:-Math.PI/2);p.aimed=true;p.runLen=0}
 p.dir=snap(p.dir);
 var ux=Math.round(Math.cos(p.dir)),uy=Math.round(Math.sin(p.dir));
@@ -1081,7 +1093,7 @@ function pinchInfo(){var a=Array.from(ptrs.values());return {mx:(a[0].x+a[1].x)/
 function plantAt(w){
 snapshot();var dir=Math.random()*Math.PI*2;
 if(rootMode){w.y=Math.max(w.y,(+wid.value)/2+2);dir=Math.PI/2}
-if(rightMode)dir=snap(dir);
+if(rightMode)dir=snap(dir);else if(isoLock)dir=isoSnap(dir);
 active=newPipe(w.x,w.y,+wid.value,dir,++topL);active.aimed=growing||rootMode;target=null;mode='draw';
 if(growing&&!growOrigin&&!rootMode)growOrigin={x:w.x,y:w.y};
 $('bNew').classList.remove('on');syncSlider();dirty=true;
@@ -1169,8 +1181,10 @@ if(!growOrigin&&!rootMode){var a=pipes.filter(function(p){return p.alive})[0];if
 setStatus(aliveCount()?'Growing.':'Tap the paper to plant a pipe.')}
 else setStatus('Grow stopped. Drag to steer. Tap a blue dot to switch pipes.')};
 $('bWeave').onclick=function(){weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':weaveMode==='alternate'?'join':'ask';this.textContent=WEAVE_NAMES[weaveMode]};
-$('bAngle').onclick=function(){rightMode=!rightMode;this.textContent=rightMode?'Shape: Right angles':'Shape: Curvy';this.classList.toggle('on',rightMode);
-pipes.forEach(function(p){if(p.alive){commit(p);p.runLen=0;if(rightMode)p.dir=snap(p.dir)}});target=null;dirty=true};
+$('bAngle').onclick=function(){var nx=rightMode?'iso':isoLock?'curvy':'right';rightMode=nx==='right';isoLock=nx==='iso';
+this.textContent=rightMode?'Shape: Right angles':isoLock?'Shape: Isometric lock':'Shape: Curvy';this.classList.toggle('on',rightMode||isoLock);
+pipes.forEach(function(p){if(p.alive){commit(p);p.runLen=0;if(rightMode)p.dir=snap(p.dir);else if(isoLock)p.dir=isoSnap(p.dir)}});target=null;dirty=true;
+if(isoLock)setStatus(iso?'Isometric lock. Drag and the pipe snaps to the three isometric directions.':'Isometric lock. Drag and the pipe snaps to isometric angles. Set View to Isometric for true 3D axes.')};
 $('bRoots').onclick=function(){
 rootMode=!rootMode;this.classList.toggle('on',rootMode);
 if(rootMode){
@@ -1210,7 +1224,7 @@ if(was){sh.classList.remove('open')}else{t.classList.add('cur');$(t.dataset.sec)
 setTimeout(resize,0)}});
 $('bView').onclick=function(){
 var c0=toWorld({x:cssW/2,y:cssH/2});iso=!iso;this.textContent=iso?'View: Isometric':'View: Flat';this.classList.toggle('on',iso);
-var P=proj(c0.x,c0.y);view.x=cssW/2-P.x*view.s;view.y=cssH/2-P.y*view.s;dirty=true};
+var P=proj(c0.x,c0.y);view.x=cssW/2-P.x*view.s;view.y=cssH/2-P.y*view.s;if(isoLock)pipes.forEach(function(p){if(p.alive){commit(p);p.dir=isoSnap(p.dir);p.runLen=0}});dirty=true};
 $('bCross').onclick=function(){crossStyle=CROSS_ORDER[(CROSS_ORDER.indexOf(crossStyle)+1)%CROSS_ORDER.length];this.textContent='Crossings: '+CROSS_NAMES[crossStyle];this.classList.toggle('on',crossStyle!=='plain');dirty=true};
 $('bShadow').onclick=function(){shadowLevel=(shadowLevel+1)%3;this.textContent=SHADOW_NAMES[shadowLevel];dirty=true};
 $('bColor').onclick=function(){themeKey=THEME_ORDER[(THEME_ORDER.indexOf(themeKey)+1)%THEME_ORDER.length];TH=THEMES[themeKey];this.textContent='Color: '+TH.name;document.body.style.background=TH.paper;dirty=true};
@@ -1274,6 +1288,7 @@ $('sGo').onclick=function(){steerGo=!steerGo;this.textContent=steerGo?'Stop':'Go
 function steerHold(id,side){var b=$(id);
 b.addEventListener('pointerdown',function(e){e.preventDefault();b.classList.add('on');
 if(rightMode){if(active&&active.alive&&!paused)turnRA(active,active.dir+(side==='r'?1:-1)*Math.PI/2);return}
+if(isoLock){if(active&&active.alive&&!paused){commit(active);active.dir=isoNext(active.dir,side==='r'?1:-1);active.runLen=0}return}
 if(side==='r')rightHeld=true;else leftHeld=true});
 ['pointerup','pointercancel','pointerleave'].forEach(function(t){b.addEventListener(t,function(){b.classList.remove('on');if(side==='r')rightHeld=false;else leftHeld=false})})}
 steerHold('sLeft','l');steerHold('sRight','r');
