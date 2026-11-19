@@ -133,6 +133,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <button id="bCross">Crossings: Plain</button>
 <button id="bSkin">Skin: Plain</button>
 <button id="bInk">Line: Graphite</button>
+<button id="bInkMode">Line color: All lines</button>
 <button id="bColor">Color: Pencil</button>
 <button id="bShadow">Shadows: Off</button>
 </div>
@@ -328,6 +329,21 @@ dancer:[circ(0,-0.85,0.22,16),[[0,-0.6],[0.05,0.25]],[[-0.75,-0.95],[0,-0.45],[0
 dog:[ell(0,0.05,0.7,0.3,24),circ(0.85,-0.3,0.25,16),[[-0.5,0.3],[-0.55,0.8]],[[-0.2,0.32],[-0.2,0.82]],[[0.3,0.32],[0.3,0.82]],[[0.5,0.3],[0.55,0.8]],[[-0.68,-0.05],[-1.05,-0.45]],[[0.75,-0.5],[0.9,-0.78],[1,-0.48]]]};
 var geoCache=new WeakMap();
 function inkColor(){return INKS[inkIdx][1]||TH.ink}
+var inkMode='all',INKMODES=['all','pipe','shift'],INKMODE_NAMES={all:'Line color: All lines',pipe:'Line color: Per pipe',shift:'Line color: Shifting'};
+function pipeInk(p,d){
+if(inkMode==='shift')return 'hsl('+Math.round((((p.hue||0)+d*0.5)%360+360)%360)+',72%,40%)';
+if(inkMode==='pipe'){var k=p.ink||0;return (INKS[k]&&INKS[k][1])||TH.ink}
+return inkColor()}
+function strokeEdgeShift(c,E,pts,a,b,gaps,p){
+function inGap(d){for(var g=0;g<gaps.length;g++)if(d>gaps[g].d0&&d<gaps[g].d1)return true;return false}
+var i=a;
+while(i<b){
+var j=Math.min(b,i+6),dm=(pts[i].d+pts[j].d)/2;
+c.strokeStyle=pipeInk(p,dm);c.beginPath();var pen=false;
+for(var k=i;k<j;k++){var mid=(pts[k].d+pts[k+1].d)/2;
+if(inGap(mid)){pen=false;continue}
+if(!pen){c.moveTo(E[k][0],E[k][1]);pen=true}c.lineTo(E[k+1][0],E[k+1][1])}
+c.stroke();i=j}}
 var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
 var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over',join:'Weave: Join'};
 var wid=document.getElementById('wid'),spd=document.getElementById('spd'),statusEl=document.getElementById('status'),ask=document.getElementById('ask');
@@ -339,7 +355,7 @@ function resize(){var r=cv.getBoundingClientRect(),w=Math.round(Math.max(1,r.wid
 window.addEventListener('resize',resize);
 
 function newPipe(x,y,w,dir,layer){
-var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0,hue:Math.random()*360,parent:0,kids:[],joinInfo:null,runLen:0,pendingTurn:0,pc:0,left:null,wander:1,home:dir};
+var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0,hue:Math.random()*360,parent:0,kids:[],joinInfo:null,runLen:0,pendingTurn:0,pc:0,left:null,wander:1,home:dir,ink:inkIdx};
 pipes.push(p);return p}
 function byId(id){for(var i=0;i<pipes.length;i++)if(pipes[i].id===id)return pipes[i];return null}
 function pipeMap(){var m={};pipes.forEach(function(p){m[p.id]=p});return m}
@@ -671,7 +687,7 @@ var w=p.hw,nx=-Math.sin(p.dir),ny=Math.cos(p.dir),kids=[];
 for(var i=0;i<n;i++){
 var off=-w/2+w/(2*n)+i*w/n,side=i-(n-1)/2,d=rightMode?p.dir:p.dir+side*0.35;
 var k=newPipe(p.hx+nx*off,p.hy+ny*off,Math.max(4,w/n),d,p.layer);
-k.startCap=false;k.aimed=true;k.grace=w*1.5+20;k.turn=side*0.002;k.hue=(p.hue+side*28+360)%360;k.parent=p.id;k.wander=p.wander;k.home=p.home!=null?p.home:p.dir;
+k.startCap=false;k.aimed=true;k.ink=p.ink;k.grace=w*1.5+20;k.turn=side*0.002;k.hue=(p.hue+side*28+360)%360;k.parent=p.id;k.wander=p.wander;k.home=p.home!=null?p.home:p.dir;
 if(rightMode&&side!==0)k.pendingTurn=side<0?-Math.PI/2:Math.PI/2;
 p.kids.push(k.id);kids.push(k)}
 kids.forEach(function(k){k.family=[p.id].concat(p.family,kids.filter(function(o){return o!==k}).map(function(o){return o.id}));k.pc=p.pc||0});
@@ -830,7 +846,7 @@ c.beginPath();c.moveTo(BL[a][0],BL[a][1]);for(i=a+1;i<=b;i++)c.lineTo(BL[i][0],B
 c.beginPath();c.moveTo(BR[a][0],BR[a][1]);for(i=a+1;i<=b;i++)c.lineTo(BR[i][0],BR[i][1]);c.stroke();c.globalAlpha=1}
 function drawBridge(c,r,cc,lw){
 var pts=r.pts,N=r.N,p=r.p,hs=(cc.span||p.hw)/2+p.hw*0.4,ii=subRange(pts,r.a,r.b,cc.d-hs,cc.d+hs);if(!ii)return;
-var col=inkColor();c.strokeStyle=col;c.lineWidth=lw*1.8;
+var col=pipeInk(p,cc.d);c.strokeStyle=col;c.lineWidth=lw*1.8;
 offPath(c,pts,N,ii[0],ii[1],function(w){return w/2});c.stroke();offPath(c,pts,N,ii[0],ii[1],function(w){return -w/2});c.stroke();
 c.lineWidth=lw;c.beginPath();var d0=Math.max(pts[r.a].d,cc.d-hs),d1=Math.min(pts[r.b].d,cc.d+hs);
 for(var d=d0;d<=d1;d+=7){perpAt(c,pts,d,function(w){return w/2+w*0.07},function(w){return w*0.07});perpAt(c,pts,d,function(w){return -(w/2+w*0.07)},function(w){return w*0.07})}
@@ -897,12 +913,12 @@ if(tunnelsOn())myCr.forEach(function(cc){if(cc.role==='under')drawPortals(c,r,cc
 var crs=byPipe[p.id];
 if(crs){var d0=pts[r.a].d,d1=pts[r.b].d;
 crs.forEach(function(cr){if(cr.d>=d0&&(cr.d<d1||(r.b===r.last&&cr.d<=d1)))drawCritter(c,cr,pts,now)})}
-c.lineWidth=TH.fill==='pop'?lw*2.6:skin==='tunnel'?lw*1.7:lw;c.strokeStyle=skin==='tunnel'&&inkIdx===0?'#6b4a2b':inkColor();
-var ops=p.openings||[];
-strokeEdge(c,L,pts,r.a,r.b,ops.filter(function(g){return g.side==='L'}));
-strokeEdge(c,R,pts,r.a,r.b,ops.filter(function(g){return g.side==='R'}));
-if(r.a===0&&p.startCap){c.beginPath();c.moveTo(L[0][0],L[0][1]);c.lineTo(R[0][0],R[0][1]);c.stroke()}
-if(r.b===r.last&&!p.alive&&p.endCap){c.beginPath();c.moveTo(L[r.last][0],L[r.last][1]);c.lineTo(R[r.last][0],R[r.last][1]);c.stroke()}
+c.lineWidth=TH.fill==='pop'?lw*2.6:skin==='tunnel'?lw*1.7:lw;c.strokeStyle=skin==='tunnel'&&inkIdx===0&&inkMode==='all'?'#6b4a2b':pipeInk(p,pts[r.a].d);
+var ops=p.openings||[],opL=ops.filter(function(g){return g.side==='L'}),opR=ops.filter(function(g){return g.side==='R'});
+if(inkMode==='shift'){strokeEdgeShift(c,L,pts,r.a,r.b,opL,p);strokeEdgeShift(c,R,pts,r.a,r.b,opR,p)}
+else{strokeEdge(c,L,pts,r.a,r.b,opL);strokeEdge(c,R,pts,r.a,r.b,opR)}
+if(r.a===0&&p.startCap){c.strokeStyle=pipeInk(p,pts[0].d);c.beginPath();c.moveTo(L[0][0],L[0][1]);c.lineTo(R[0][0],R[0][1]);c.stroke()}
+if(r.b===r.last&&!p.alive&&p.endCap){c.strokeStyle=pipeInk(p,pts[r.last].d);c.beginPath();c.moveTo(L[r.last][0],L[r.last][1]);c.lineTo(R[r.last][0],R[r.last][1]);c.stroke()}
 if(bridgesOn())myCr.forEach(function(cc){if(cc.role==='over')drawBridge(c,r,cc,lw)});
 if(TH.fill==='pop'&&!p.alive){c.lineWidth=lw*1.3;c.strokeStyle=inkColor();c.lineCap='round';c.beginPath();
 for(var rdd=Math.ceil(pts[r.a].d/18)*18;rdd<pts[r.b].d;rdd+=18){perpAt(c,pts,rdd,function(w){return w/2+w*0.18+6},function(w){return w*0.07+3});perpAt(c,pts,rdd+9,function(w){return -(w/2+w*0.18+6)},function(w){return w*0.07+3})}c.stroke()}});
@@ -1221,7 +1237,11 @@ if(!active||!active.alive){setStatus('Start or pick a pipe first, then tap Play.
 if(active.play&&!active.play.cycles){active.tw=active.play.base;active.play=null;this.classList.remove('on');setStatus('Pattern stopped.');return}
 snapshot();active.play={pos:0,base:active.hw,cycles:0};target=null;this.classList.add('on');setStatus('Playing your pattern. Tap Play again to stop.')};
 $('bSkin').onclick=function(){skin=SKINS[(SKINS.indexOf(skin)+1)%SKINS.length];this.textContent='Skin: '+SKIN_NAMES[skin];dirty=true};
-$('bInk').onclick=function(){inkIdx=(inkIdx+1)%INKS.length;this.textContent='Line: '+INKS[inkIdx][0];dirty=true};
+$('bInk').onclick=function(){inkIdx=(inkIdx+1)%INKS.length;this.textContent='Line: '+INKS[inkIdx][0];
+if(inkMode==='pipe'){if(active&&active.alive){active.ink=inkIdx;setStatus('This pipe and every new pipe now draw in '+INKS[inkIdx][0]+'.')}else setStatus('New pipes will draw in '+INKS[inkIdx][0]+'.')}
+dirty=true};
+$('bInkMode').onclick=function(){inkMode=INKMODES[(INKMODES.indexOf(inkMode)+1)%INKMODES.length];this.textContent=INKMODE_NAMES[inkMode];this.classList.toggle('on',inkMode!=='all');
+setStatus(inkMode==='pipe'?'Each pipe keeps its own color. Pick a pipe, then tap Line to color it.':inkMode==='shift'?'Line colors now shift along each pipe as it grows.':'Line picks one color for every line.');dirty=true};
 $('bRules').onclick=function(){$('rules').style.display='flex'};
 $('rPreset').onchange=function(){var pr=PRESETS[this.value];if(!pr)return;presetWeave=pr[3]||null;$('rLean').value=pr[0];$('rWiggle').value=String(pr[1]);$('rSteps').value=pr[2]};
 $('rSteps').oninput=function(){$('rPreset').value='custom'};
