@@ -14,6 +14,10 @@ html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-fam
 #bar{background:var(--bar);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px}
 #statusPill{position:absolute;left:8px;right:8px;top:8px;pointer-events:none;display:flex}
 #statusPill span{background:rgba(255,255,255,0.92);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted);max-width:100%}
+#fsBtn{position:absolute;right:10px;bottom:10px;font:inherit;font-size:14px;font-weight:600;padding:8px 14px;min-height:40px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,0.92);color:var(--ink);z-index:5}
+body.fs #bar,body.fs #statusPill{display:none}
+body.fs #wrap{padding-top:0}
+body.fs #fsBtn{opacity:0.55}
 #sheet{display:none;flex-direction:column;gap:8px}
 #sheet.open{display:flex}
 .sec{display:none;flex-direction:column;gap:8px}
@@ -49,7 +53,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 </head>
 <body>
 <div id="wrap">
-<div id="stage"><canvas id="cv"></canvas><div id="statusPill"><span id="status">Tap the paper to start a pipe.</span></div></div>
+<div id="stage"><canvas id="cv"></canvas><button id="fsBtn">Full screen</button><div id="statusPill"><span id="status">Tap the paper to start a pipe.</span></div></div>
 <div id="bar">
 <div class="row panel" id="drivePanel">
 <button id="dLeft">Turn left</button>
@@ -1303,6 +1307,18 @@ p.passing=[];p.aimed=true;p.traveled=Math.max(p.traveled,p.grace+1);
 target=null;rebuildGrid();syncSlider();dirty=true;setStatus('Now growing from the other end.')}
 
 resize();requestAnimationFrame(loop);
+})();
+</script>
+<script>
+(function(){
+var b=document.getElementById('fsBtn'),body=document.body;
+function after(){setTimeout(function(){window.dispatchEvent(new Event('resize'))},60);setTimeout(function(){window.dispatchEvent(new Event('resize'))},300)}
+function setFs(on){body.classList.toggle('fs',on);b.textContent=on?'Exit full screen':'Full screen';after()}
+b.addEventListener('click',function(){
+var on=!body.classList.contains('fs');setFs(on);
+try{if(on&&document.documentElement.requestFullscreen&&!document.fullscreenElement)document.documentElement.requestFullscreen().catch(function(){});
+else if(!on&&document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(function(){})}catch(e){}});
+document.addEventListener('fullscreenchange',function(){if(!document.fullscreenElement&&body.classList.contains('fs'))setFs(false)});
 })();
 </script>
 </body>
