@@ -125,6 +125,7 @@ select,input[type=text]{font:inherit;font-size:16px;padding:8px;border:1px solid
 <button id="bSurprise">Surprise me</button>
 <button id="bFill">Fill canvas</button>
 <button id="bFillStyle">Fill: Rows</button>
+<button id="bMemory">Memory</button>
 </div>
 </div>
 <div class="sec" id="secStyle">
@@ -356,6 +357,7 @@ window.addEventListener('resize',resize);
 
 function newPipe(x,y,w,dir,layer){
 var p={id:nextId++,pts:[{x:x,y:y,w:w,l:layer,d:0}],hx:x,hy:y,hw:w,tw:w,dir:dir,layer:layer,alive:true,startCap:true,endCap:true,family:[],traveled:0,grace:0,passing:[],headD:0,joinTo:null,aimed:false,crossings:[],turn:0,sinceSplit:0,hue:Math.random()*360,parent:0,kids:[],joinInfo:null,runLen:0,pendingTurn:0,pc:0,left:null,wander:1,home:dir,ink:inkIdx};
+if(memOn&&memCur){memCur.kc=(memCur.kc||0)+1;p.mkey=mk(memCur)+'.'+memCur.kc}
 pipes.push(p);return p}
 function byId(id){for(var i=0;i<pipes.length;i++)if(pipes[i].id===id)return pipes[i];return null}
 function pipeMap(){var m={};pipes.forEach(function(p){m[p.id]=p});return m}
@@ -394,7 +396,7 @@ var last=p.pts[p.pts.length-1];
 if(Math.hypot(p.hx-last.x,p.hy-last.y)<0.01)return;
 p.pts.push({x:p.hx,y:p.hy,w:p.hw,l:p.layer,d:p.headD});
 addSeg(p,p.pts.length-2);
-commits++;if(commits%(growing?400:25)===0)snapshot()}
+commits++;if(!memOn&&commits%(growing?400:25)===0)snapshot()}
 
 function angDiff(a,b){var d=a-b;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
 function snap(a){var q=Math.PI/2;return Math.round(a/q)*q}
@@ -402,6 +404,12 @@ function opp(r){return r==='over'?'under':'over'}
 function coin(){return Math.random()<0.5?'over':'under'}
 function turnRA(p,to){commit(p);p.dir=snap(to);p.runLen=0}
 var isoLock=false;
+var memOn=false,memRun=false,memStart=null,memSeed=1,memRng=null,memRound=0,memT=0,scars=[],MEMDUR=[10,15,30,45,60,90];
+var memRngs=new Map(),memCur=null,memFix={};
+function mk(p){return p.mkey||'r'+p.id}
+function hashStr(t){var h=2166136261;for(var i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rngFor(p){var r=memRngs.get(p);if(!r){r=mulberry(hashStr(memSeed+':'+mk(p)));memRngs.set(p,r)}return r}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function isoAxes(){return iso?[0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*5/4,Math.PI*3/2]:[-Math.PI/2,-Math.PI/6,Math.PI/6,Math.PI/2,Math.PI*5/6,Math.PI*7/6]}
 function isoSnap(a){var best=a,bd=9;isoAxes().forEach(function(t){var d=Math.abs(angDiff(a,t));if(d<bd){bd=d;best=t}});return best}
 function isoNext(a,step){var ax=isoAxes(),cur=isoSnap(a),i=0;for(var k=0;k<ax.length;k++)if(Math.abs(angDiff(ax[k],cur))<1e-6)i=k;return ax[(i+step+ax.length)%ax.length]}
@@ -429,7 +437,7 @@ var role=kind==='join'?'under':kind;
 if(kind==='over')p.layer=++topL;else p.layer=--botL;
 var span=p.hw,qspan=p.hw;
 if(info.best&&info.best.q){var cl=locate(pipePoints(info.best.q),info.best.qd),csn=Math.max(0.3,Math.abs(Math.sin(angDiff(p.dir,cl.ang))));span=cl.w/csn;qspan=p.hw/csn}
-p.crossings.push({d:kind==='join'?p.headD:p.headD+(span+qspan)/2,role:role,span:span,join:kind==='join'});
+p.crossings.push({d:kind==='join'?p.headD:p.headD+(span+qspan)/2,role:role,span:span,join:kind==='join',hit:!p.link&&!p.feeds&&p.mergeInto==null,hd:p.headD,qa:info.best&&info.best.q?locate(pipePoints(info.best.q),info.best.qd).ang:null});
 if(kind!=='join'&&info.best&&info.best.q)info.best.q.crossings.push({d:info.best.qd,role:opp(role),span:qspan});
 info.ids.forEach(function(id){if(p.passing.indexOf(id)<0)p.passing.push(id)});
 if(kind==='join'&&info.best){
@@ -588,6 +596,9 @@ return out}
 
 function stepPipe(p){
 if(!p||!p.alive||paused)return false;
+if(memOn&&growing){var fl=memFix[mk(p)];if(fl){p.fd=p.fd||0;while(p.fd<fl.length&&p.headD>=fl[p.fd].d){var f=fl[p.fd];p.fd++;
+if(f.act==='end'){endPipeOf(p,true);return true}
+commit(p);p.dir=rightMode?snap(f.ang):f.ang;p.turn=0;p.runLen=0;p.arc=null;p.spiral=null}}}
 var len=speed,rad=p.hw*0.55+8,dist=Infinity,minRun=Math.max(p.hw*1.2,24),dir0=p.dir;
 if(p.joinTo){
 var jx=p.joinTo.x-p.hx,jy=p.joinTo.y-p.hy;dist=Math.hypot(jx,jy);
@@ -1050,6 +1061,7 @@ for(var gy=Math.floor(y0/st)*st;gy<=y1;gy+=st){ctx.moveTo(x0,gy);ctx.lineTo(x1,g
 ctx.stroke()}
 if(rootMode)drawGround(ctx);
 drawArt(ctx,false,view.s,performance.now());
+if(memOn&&scars.length){ctx.strokeStyle='rgba(200,60,60,0.35)';ctx.lineWidth=1.5/view.s;scars.forEach(function(s){ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.stroke()})}
 ctx.setTransform(DPR,0,0,DPR,0,0);
 if(themeKey==='ocean'){var bt=performance.now()*0.001;ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=1.5;
 for(var bi=0;bi<34;bi++){var bsp=18+(bi*37)%45,bx=(bi*137.5)%cssW+Math.sin(bt*1.7+bi)*6,by=cssH+20-((bt*bsp+bi*97)%(cssH+60));ctx.beginPath();ctx.arc(bx,by,2+(bi%4),0,Math.PI*2);ctx.stroke()}}
@@ -1061,8 +1073,8 @@ if(!growing&&target&&active&&active.alive){var tp=proj(target.x,target.y);ctx.be
 function loop(){
 var moved=false;
 if(growing){
-var list=pipes.slice();
-for(var i=0;i<list.length;i++){if(paused)break;if(list[i].alive&&stepPipe(list[i]))moved=true}
+var list=pipes.slice(),rr=Math.random;
+try{for(var i=0;i<list.length;i++){if(paused)break;if(!list[i].alive)continue;if(memOn&&memRng){memCur=list[i];Math.random=rngFor(list[i])}if(stepPipe(list[i]))moved=true}}finally{Math.random=rr;memCur=null}
 if(!paused&&aliveCount()===0){growing=false;$('bGrow').classList.remove('on');setStatus('Growth finished. Tap the paper to start a pipe.')}}
 else if(!driving&&stepPipe(active))moved=true;
 if(moved)dirty=true;
@@ -1078,6 +1090,8 @@ else if(flowMode==='water'){updateWater();dirty=true}
 if(rootMode){updateRoots();dirty=true}
 if(growing&&rotateSec>0&&performance.now()-rotT>rotateSec*1000){var rk=Object.keys(PRESETS).filter(function(k){return k!=='random'&&k!==$('rPreset').value&&(k!=='pattern'||pattern)}),nk=pick(rk);$('rPreset').value=nk;$('rPreset').onchange.call($('rPreset'));applyRules();setStatus('Rules switched to '+PRESET_NAMES[nk]+'.')}
 if(driving&&car){updateCar();dirty=true}
+if(memOn&&memRun){var left=MEMDUR[memRound]-(performance.now()-memT)/1000;
+if(left<=0)memEndRound();else if(frameNo%15===0)setStatus('Memory round '+(memRound+1)+' of '+MEMDUR.length+'. '+Math.ceil(left)+' seconds left. '+scars.length+' spots remembered.')}
 if(frameNo%15===0)$('bPlay').classList.toggle('on',!!(active&&active.play&&!active.play.cycles));
 if(themeKey==='ocean')dirty=true;
 if(dirty){render();dirty=false}
@@ -1303,6 +1317,33 @@ if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermissio
 else on()};
 $('stampSel').onchange=function(){stampKey=this.value;setStatus(stampKey?'Tap the paper to stamp it. The Width slider sets the size.':'Stamp off.')};
 $('bFill').onclick=fillCanvas;
+function memReset(){
+var s=JSON.parse(memStart);pipes=s.pipes;topL=s.topL;botL=s.botL;nextId=s.nextId;active=null;
+pipes.forEach(function(p){if(p.alive){p.aimed=true;active=p}});
+paused=null;ask.style.display='none';target=null;critters=[];water={};rebuildGrid();
+var a=pipes.filter(function(p){return p.alive})[0];growOrigin=a&&!rootMode?{x:a.hx,y:a.hy}:null;
+memRng=true;memRngs=new Map();growing=true;$('bGrow').classList.add('on');setEdit(false);memT=performance.now();dirty=true}
+function memEndRound(){
+var found=0;
+pipes.forEach(function(p){(p.crossings||[]).forEach(function(c){if(!c.hit)return;
+var hd=c.hd!=null?c.hd:Math.max(0,c.d-(c.span||p.hw)),key=mk(p),fd=Math.max(1,hd-p.hw*1.5-20),fl=memFix[key]||(memFix[key]=[]),ex=null;
+for(var j=0;j<fl.length;j++)if(Math.abs(fl[j].d-fd)<60+p.hw){ex=fl[j];break}
+if(ex){ex.act='end';ex.d=Math.min(ex.d,fd)}
+else{var cur=p.dir,pa=locate(pipePoints(p),hd).ang;if(c.qa!=null){var a1=c.qa,a2=c.qa+Math.PI,t=Math.abs(angDiff(a1,pa))<Math.abs(angDiff(a2,pa))?a1:a2;var sd=angDiff(t,pa)>=0?1:-1;cur=t+sd*0.25}else cur=pa+Math.PI/2;fl.push({d:fd,act:'turn',ang:cur})}
+fl.sort(function(x,y){return x.d-y.d});
+var q=locate(pipePoints(p),hd),r=Math.max(12,p.hw*1.2),m=null;
+for(var i=0;i<scars.length;i++)if(Math.hypot(scars[i].x-q.x,scars[i].y-q.y)<scars[i].r+r*0.5){m=scars[i];break}
+if(m){m.n++;m.r=Math.max(m.r,r)}else if(scars.length<400)scars.push({x:q.x,y:q.y,r:r,n:1});found++})});
+memRound++;
+if(memRound>=MEMDUR.length){memRun=false;setStatus('Memory built after '+memRound+' rounds with '+scars.length+' spots remembered. It keeps growing with what it learned.');return}
+memReset();setStatus('Round '+memRound+' found '+found+' collisions. Starting round '+(memRound+1)+' for '+MEMDUR[memRound]+' seconds.')}
+$('bMemory').onclick=function(){
+if(memOn){memOn=false;memRun=false;memRng=null;scars=[];memFix={};this.classList.remove('on');growing=false;$('bGrow').classList.remove('on');setEdit(true);dirty=true;setStatus('Memory off. The last round stays on the paper.');return}
+if(!aliveCount()){setStatus('Tap the paper to plant a pipe first, then tap Memory.');return}
+if(weaveMode==='ask'){weaveMode='alternate';$('bWeave').textContent=WEAVE_NAMES[weaveMode]}
+snapshot();memStart=JSON.stringify({pipes:pipes,topL:topL,botL:botL,nextId:nextId});memSeed=(Math.random()*4294967296)>>>0;
+scars=[];memFix={};memRound=0;memOn=true;memRun=true;this.classList.add('on');memReset();
+setStatus('Memory round 1 of '+MEMDUR.length+'. Watch it grow, reset, and fix what collided.')};
 $('bFillStyle').onclick=function(){fillStyle=FILLS[(FILLS.indexOf(fillStyle)+1)%FILLS.length];this.textContent='Fill: '+FILL_NAMES[fillStyle]};
 $('bEnd').onclick=function(){if(!paused)endPipeOf(active,false)};
 $('bFlip').onclick=flip;
