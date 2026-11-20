@@ -297,10 +297,10 @@ cityscape:['free',0,'wander 0, burst 4, grow 70, sprout 90, grow 70, sprout 90, 
 highway:['free',0,'wander 10, grow 260, cross 4, grow 260, roundabout 4, grow 260, cross 6, grow 260, roundabout 5, repeat','join'],
 interstate:['free',0,'wander 0, burst 4, grow 380, cross 4, repeat 3','join'],
 roundabouts:['free',0,'wander 25, grow 200, roundabout 3, grow 220, roundabout 4, repeat','join'],
-basket:['free',0,'wander 0, loom 10','alternate'],
-crochet:['free',0,'wander 0, arc 360, grow 22, repeat','alternate'],
-lace:['free',0,'wander 0, burst 6, grow 50, fork 30, grow 40, link, grow 30, fork 30, grow 40, link, end','alternate'],
-doily:['free',0,'wander 0, ring 70, ring 140, ring 210, burst 12, grow 240, end','alternate'],
+basket:['free',0,'wander 0, loom 10','cloth'],
+crochet:['free',0,'wander 0, arc 360, grow 22, repeat','cloth'],
+lace:['free',0,'wander 0, burst 6, grow 50, fork 30, grow 40, link, grow 30, fork 30, grow 40, link, end','cloth'],
+doily:['free',0,'wander 0, ring 70, ring 140, ring 210, burst 12, grow 240, end','cloth'],
 stairburst:['free',0,'wander 0, burst 4'+', grow 40, turn 90, grow 30, turn -90'.repeat(8)+', end'],
 stairmaze:['free',0,'wander 0'+(', grow 40, turn 90, grow 30, turn -90'.repeat(2)+', fork 90').repeat(3)+', grow 40, end'],
 radiant:['free',0,'wander 120, grow 120, bubble, grow 80, fork 50, repeat'],
@@ -346,7 +346,7 @@ if(inGap(mid)){pen=false;continue}
 if(!pen){c.moveTo(E[k][0],E[k][1]);pen=true}c.lineTo(E[k+1][0],E[k+1][1])}
 c.stroke();i=j}}
 var grid=new Map(),undoStack=[],dirty=true,speed=1,growing=false,weaveMode='ask',growOrigin=null;
-var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over',join:'Weave: Join'};
+var WEAVE_NAMES={ask:'Weave: Ask me',random:'Weave: Random',alternate:'Weave: Under over',cloth:'Weave: Cloth',join:'Weave: Join'};
 var wid=document.getElementById('wid'),spd=document.getElementById('spd'),statusEl=document.getElementById('status'),ask=document.getElementById('ask');
 function $(id){return document.getElementById(id)}
 
@@ -414,6 +414,14 @@ function isoAxes(){return iso?[0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*5/4,Math.PI
 function isoSnap(a){var best=a,bd=9;isoAxes().forEach(function(t){var d=Math.abs(angDiff(a,t));if(d<bd){bd=d;best=t}});return best}
 function isoNext(a,step){var ax=isoAxes(),cur=isoSnap(a),i=0;for(var k=0;k<ax.length;k++)if(Math.abs(angDiff(ax[k],cur))<1e-6)i=k;return ax[(i+step+ax.length)%ax.length]}
 
+function clothChoice(p,h){
+if(p.underUntil!=null&&p.headD<p.underUntil)return {role:'under',bundle:false};
+var ux=Math.cos(p.dir),uy=Math.sin(p.dir),maxD=p.hw*8+120,gapNeed=Math.max(6,p.hw*0.9),ids=[],gap=0,end=0,pw=Math.max(2,p.hw*0.5);
+for(var s=0;s<=maxD;s+=3){var r=hits(p,p.hx+ux*s,p.hy+uy*s,pw);
+if(r.ids.length){r.ids.forEach(function(id){if(ids.indexOf(id)<0)ids.push(id)});gap=0;end=s}
+else{gap+=3;if(ids.length&&gap>=gapNeed)break}}
+if(ids.length>=2){p.underUntil=p.headD+end+p.hw;return {role:'under',bundle:true}}
+return {role:decideAlternate(p,h.best),bundle:false}}
 function decideAlternate(p,best){
 var lastP=null;
 p.crossings.forEach(function(c){if(c.d<=p.headD&&(!lastP||c.d>lastP.d))lastP=c});
@@ -437,7 +445,7 @@ var role=kind==='join'?'under':kind;
 if(kind==='over')p.layer=++topL;else p.layer=--botL;
 var span=p.hw,qspan=p.hw;
 if(info.best&&info.best.q){var cl=locate(pipePoints(info.best.q),info.best.qd),csn=Math.max(0.3,Math.abs(Math.sin(angDiff(p.dir,cl.ang))));span=cl.w/csn;qspan=p.hw/csn}
-p.crossings.push({d:kind==='join'?p.headD:p.headD+(span+qspan)/2,role:role,span:span,join:kind==='join',hit:!p.link&&!p.feeds&&p.mergeInto==null,hd:p.headD,qa:info.best&&info.best.q?locate(pipePoints(info.best.q),info.best.qd).ang:null});
+p.crossings.push({d:kind==='join'?p.headD:p.headD+(span+qspan)/2,role:role,span:span,join:kind==='join',hit:!p.link&&!p.feeds&&p.mergeInto==null&&(weaveMode!=='cloth'||!!info.bundle),hd:p.headD,qa:info.best&&info.best.q?locate(pipePoints(info.best.q),info.best.qd).ang:null});
 if(kind!=='join'&&info.best&&info.best.q)info.best.q.crossings.push({d:info.best.qd,role:opp(role),span:qspan});
 info.ids.forEach(function(id){if(p.passing.indexOf(id)<0)p.passing.push(id)});
 if(kind==='join'&&info.best){
@@ -677,7 +685,8 @@ if(fresh.length){
 if(p.mergeInto!=null){p.mergeInto=null;if(!p.link)p.feeds=true;applyChoice(p,'join',h);p.passing=h.ids.slice();return true}
 if(weaveMode==='ask'){paused={p:p,ids:h.ids,best:h.best};showAsk();return true}
 if(weaveMode==='join'){applyChoice(p,'join',h);p.passing=h.ids.slice();return true}
-applyChoice(p,weaveMode==='random'?coin():decideAlternate(p,h.best),h)}
+if(weaveMode==='cloth'){var cch=clothChoice(p,h);h.bundle=cch.bundle;applyChoice(p,cch.role,h)}
+else applyChoice(p,weaveMode==='random'?coin():decideAlternate(p,h.best),h)}
 p.passing=h.ids.slice()}
 p.hx=nx;p.hy=ny;p.hw=nw;p.traveled+=len;p.headD+=len;p.sinceSplit+=len;p.runLen+=len;
 var last=p.pts[p.pts.length-1];
@@ -1194,7 +1203,7 @@ pipes.forEach(function(p){if(p.alive)p.aimed=true});
 if(!growOrigin&&!rootMode){var a=pipes.filter(function(p){return p.alive})[0];if(a)growOrigin={x:a.hx,y:a.hy}}
 setStatus(aliveCount()?'Growing.':'Tap the paper to plant a pipe.')}
 else setStatus('Grow stopped. Drag to steer. Tap a blue dot to switch pipes.')};
-$('bWeave').onclick=function(){weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':weaveMode==='alternate'?'join':'ask';this.textContent=WEAVE_NAMES[weaveMode]};
+$('bWeave').onclick=function(){weaveMode=weaveMode==='ask'?'random':weaveMode==='random'?'alternate':weaveMode==='alternate'?'cloth':weaveMode==='cloth'?'join':'ask';this.textContent=WEAVE_NAMES[weaveMode];if(weaveMode==='cloth')setStatus('Cloth weave. A pipe only goes over a single line it can pop back down from. Two or more lines in a row and it goes under and stays under.')};
 $('bAngle').onclick=function(){var nx=rightMode?'iso':isoLock?'curvy':'right';rightMode=nx==='right';isoLock=nx==='iso';
 this.textContent=rightMode?'Shape: Right angles':isoLock?'Shape: Isometric lock':'Shape: Curvy';this.classList.toggle('on',rightMode||isoLock);
 pipes.forEach(function(p){if(p.alive){commit(p);p.runLen=0;if(rightMode)p.dir=snap(p.dir);else if(isoLock)p.dir=isoSnap(p.dir)}});target=null;dirty=true;
@@ -1336,11 +1345,11 @@ for(var i=0;i<scars.length;i++)if(Math.hypot(scars[i].x-q.x,scars[i].y-q.y)<scar
 if(m){m.n++;m.r=Math.max(m.r,r)}else if(scars.length<400)scars.push({x:q.x,y:q.y,r:r,n:1});found++})});
 memRound++;
 if(memRound>=MEMDUR.length){memRun=false;setStatus('Memory built after '+memRound+' rounds with '+scars.length+' spots remembered. It keeps growing with what it learned.');return}
-memReset();setStatus('Round '+memRound+' found '+found+' collisions. Starting round '+(memRound+1)+' for '+MEMDUR[memRound]+' seconds.')}
+memReset();setStatus('Round '+memRound+' found '+found+(weaveMode==='cloth'?' crowded crossings':' collisions')+'. Starting round '+(memRound+1)+' for '+MEMDUR[memRound]+' seconds.')}
 $('bMemory').onclick=function(){
 if(memOn){memOn=false;memRun=false;memRng=null;scars=[];memFix={};this.classList.remove('on');growing=false;$('bGrow').classList.remove('on');setEdit(true);dirty=true;setStatus('Memory off. The last round stays on the paper.');return}
 if(!aliveCount()){setStatus('Tap the paper to plant a pipe first, then tap Memory.');return}
-if(weaveMode==='ask'){weaveMode='alternate';$('bWeave').textContent=WEAVE_NAMES[weaveMode]}
+if(weaveMode==='ask'||weaveMode==='alternate'){weaveMode='cloth';$('bWeave').textContent=WEAVE_NAMES[weaveMode]}
 snapshot();memStart=JSON.stringify({pipes:pipes,topL:topL,botL:botL,nextId:nextId});memSeed=(Math.random()*4294967296)>>>0;
 scars=[];memFix={};memRound=0;memOn=true;memRun=true;this.classList.add('on');memReset();
 setStatus('Memory round 1 of '+MEMDUR.length+'. Watch it grow, reset, and fix what collided.')};
